@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Field — a 2030 OS concept</title>
+<title>Zavora OS — Agents as Operating System</title>
 <style>
   :root {
     --bg0: #070a12;
@@ -24,7 +24,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
     color: var(--ink);
     background: radial-gradient(140% 120% at 50% 8%, var(--bg1), var(--bg0) 60%);
-    overflow: hidden;
+    overflow-x: hidden; overflow-y: auto;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -47,7 +47,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 
   /* ---------- stage ---------- */
-  .stage { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column;
+  .stage { position: relative; z-index: 2; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; padding: 4vh 5vw; }
 
   /* origin / causality chip */
@@ -110,13 +110,37 @@
   .lf-dots i { width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; }
   .lf-dots i.on { background:#fff; width:14px; border-radius:3px; }
 
+  /* ---------- ambient background cards (flank the field, dimmed like side cards) ---------- */
+  .bgcards { position: fixed; inset: 0; z-index: 1; pointer-events: none; perspective: 1600px; }
+  .bgcard { position: absolute; width: 230px; border-radius: 18px; padding: 16px;
+    background: var(--glass); border: 1px solid var(--stroke);
+    backdrop-filter: blur(20px) saturate(130%); -webkit-backdrop-filter: blur(20px) saturate(130%);
+    box-shadow: 0 30px 70px -30px rgba(0,0,0,.7); pointer-events: auto; cursor: pointer;
+    opacity: .5; filter: blur(1.5px); transition: opacity .5s var(--spring), transform .5s var(--spring), filter .5s var(--spring); }
+  .bgcard:hover { opacity: .95; filter: none; }
+  .bgcard .bc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+  .bgcard .bc-ic { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; font-size: 15px;
+    background: linear-gradient(135deg, rgba(124,92,255,.3), rgba(37,208,192,.2)); border: 1px solid var(--stroke); position: relative; }
+  /* faint, non-distracting "alive" dot */
+  .bgcard .bc-ic::after { content: ''; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent-b); box-shadow: 0 0 7px var(--accent-b); opacity: .5; animation: bcpulse 3.6s ease-in-out infinite; }
+  @keyframes bcpulse { 0%,100%{opacity:.2} 50%{opacity:.7} }
+  .bgcard .bc-title { font-size: 13px; font-weight: 650; }
+  .bgcard .bc-sub { font-size: 10.5px; color: var(--muted); }
+  .bgcard .bc-row { font-size: 11.5px; color: #cdd5f0; padding: 3px 0; display: flex; align-items: center; gap: 6px;
+    transition: opacity .5s ease; }
+  .bgcard .bc-row small { color: var(--muted); margin-left: auto; font-size: 10px; }
+  .bgcard .bc-act small { transition: opacity .4s ease; }
+  /* recede further when a card is maximized so they never compete */
+  body:has(.cards.flow) .bgcard { opacity: .22; filter: blur(3px); }
+
   /* ---------- card field ---------- */
   .field { position: relative; z-index: 2; width: 100%; max-width: 1180px; flex: 1;
     display: flex; align-items: center; justify-content: center; perspective: 1600px; }
   .cards { display: flex; gap: 26px; align-items: stretch; justify-content: center;
     flex-wrap: wrap; width: 100%; transition: filter .5s var(--spring); transform-style: preserve-3d; }
 
-  .card { position: relative; width: 320px; min-height: 300px; padding: 22px;
+  .card { position: relative; width: var(--cardw, 320px); min-height: 300px; padding: 22px;
     border-radius: 22px; background: var(--glass); border: 1px solid var(--stroke);
     backdrop-filter: blur(26px) saturate(140%); -webkit-backdrop-filter: blur(26px) saturate(140%);
     box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.06);
@@ -238,15 +262,12 @@
   @keyframes ring { 0%{transform:scale(.9);opacity:.8} 100%{transform:scale(1.6);opacity:0} }
 
   /* Suzy — the voice/summary persona */
-  .suzy { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-14px);
-    display: flex; align-items: flex-start; gap: 12px; max-width: 620px; padding: 14px 20px;
+  .suzy { position: fixed; bottom: 116px; left: 50%; transform: translateX(-50%) translateY(14px);
+    display: flex; align-items: flex-start; gap: 12px; max-width: 620px; width: calc(100% - 48px); padding: 14px 20px;
     border-radius: 18px; background: var(--glass); border: 1px solid var(--stroke);
     backdrop-filter: blur(20px); box-shadow: 0 24px 60px -28px rgba(0,0,0,.8);
-    opacity: 0; pointer-events: none; transition: all .6s var(--spring); z-index: 4; }
+    opacity: 0; pointer-events: none; transition: all .6s var(--spring); z-index: 35; }
   .suzy.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  /* in carousel mode, the summary sits at the bottom, clear of the focused card */
-  body:has(.cards.flow) .suzy { top: auto; bottom: 120px; }
-  body:has(.cards.flow) .suzy.show { transform: translateX(-50%) translateY(0); }
   .suzy .face { width: 30px; height: 30px; flex: none; border-radius: 50%;
     background: linear-gradient(135deg, var(--accent-c), var(--accent-a));
     display: grid; place-items: center; font-size: 15px;
@@ -258,8 +279,16 @@
   .suzy .text { font-size: 14.5px; line-height: 1.55; color: #e7ebff; }
   .suzy .text b { color: #fff; font-weight: 650; }
 
-  .brand { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; z-index: 3;
-    font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(154,164,196,.5); }
+  .brand { position: fixed; bottom: 16px; left: 0; right: 0; z-index: 3;
+    display: flex; align-items: center; justify-content: center; gap: 10px; pointer-events: none; }
+  .brand .logo { flex: none; filter: drop-shadow(0 2px 8px rgba(124,92,255,.4)); }
+  .brand .wm { font-size: 13px; letter-spacing: 2.5px; font-weight: 600; color: #cdd5f0; }
+  .brand .wm b { font-weight: 800;
+    background: linear-gradient(120deg, var(--accent-a), var(--accent-b));
+    -webkit-background-clip: text; background-clip: text; color: transparent; margin-left: 2px; }
+  .brand .tag { font-size: 11px; letter-spacing: .3px; color: rgba(154,164,196,.6);
+    padding-left: 10px; border-left: 1px solid var(--stroke); }
+  @media (max-width: 620px) { .brand .tag { display: none; } }
 
   /* ---------- VerbUI: gesture states ---------- */
   .card { cursor: grab; }
@@ -358,19 +387,118 @@
   .greet .orb { width: 50px; height: 50px; margin: 0 auto 20px; border-radius: 50%; --amp: 0;
     background: linear-gradient(135deg, var(--accent-c), var(--accent-a)); transform: scale(calc(1 + var(--amp)*.5));
     box-shadow: 0 0 calc(20px + var(--amp)*40px) rgba(255,126,182,.6); transition: transform .06s linear; }
-  .greet .clock { font-size: 60px; font-weight: 200; letter-spacing: -1px; line-height: 1; margin-bottom: 6px;
+  .greet .clock { font-size: clamp(40px, 9vw, 64px); font-weight: 200; letter-spacing: -1px; line-height: 1; margin-bottom: 6px;
     text-shadow: 0 4px 30px rgba(0,0,0,.5); }
-  .greet h2 { margin: 0 0 18px; font-size: 22px; font-weight: 600; opacity: .9; }
-  .greet .quote { margin: 0 auto 30px; max-width: 460px; font-size: 17px; line-height: 1.5; font-style: italic;
-    color: #e7ebff; min-height: 52px; transition: opacity .6s ease; text-shadow: 0 2px 16px rgba(0,0,0,.6); }
+  .greet h2 { margin: 0 0 18px; font-size: clamp(18px, 3.4vw, 24px); font-weight: 600; opacity: .9; }
+  /* greeting brand lockup */
+  .greet-brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 26px; }
+  .greet-brand .glogo { --amp: 0; filter: drop-shadow(0 3px 14px rgba(124,92,255,.55));
+    transform: scale(calc(1 + var(--amp)*.4)); transition: transform .06s linear; }
+  .greet-brand .gwm { font-size: clamp(16px, 3.2vw, 20px); letter-spacing: 3px; font-weight: 600; color: #e7ebff; }
+  .greet-brand .gwm b { font-weight: 800; margin-left: 2px;
+    background: linear-gradient(120deg, var(--accent-a), var(--accent-b));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .greet .gtag { margin: 22px 0 0; font-size: clamp(12px, 2.6vw, 13.5px); letter-spacing: .5px;
+    color: rgba(154,164,196,.7); }
+  .greet .taphint { margin: 14px 0 0; font-size: 11.5px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(154,164,196,.5); animation: tappulse 2.4s ease-in-out infinite; }
+  .greet .taphint.gone { display: none; }
+  @keyframes tappulse { 0%,100%{opacity:.3} 50%{opacity:.8} }
+  .greet .cc { margin: -8px auto 20px; max-width: min(440px, 90vw); font-size: clamp(13px, 2.6vw, 15px); line-height: 1.55;
+    color: var(--muted); min-height: 20px; opacity: 0; transition: opacity .4s ease; padding: 0 14px; }
+  .greet .cc.show { opacity: 1; }
+  .greet .cc .w { opacity: .25; transition: opacity .25s ease; }    /* word reveal synced to audio */
+  .greet .cc .w.lit { opacity: 1; }
+  .greet .quote { margin: 0 auto 30px; max-width: min(460px, 90vw); font-size: clamp(15px, 3vw, 18px); line-height: 1.5; font-style: italic;
+    color: #e7ebff; min-height: 52px; transition: opacity .6s ease; text-shadow: 0 2px 16px rgba(0,0,0,.6); padding: 0 14px; }
   .greet .big-btn { font-size: 15px; padding: 14px 30px; white-space: nowrap; }
   .greet .mute { position: absolute; bottom: -60px; left: 50%; transform: translateX(-50%);
     width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--stroke);
     background: rgba(255,255,255,.06); color: var(--ink); cursor: pointer; font-size: 15px; }
   .greet .mute.off { opacity: .4; }
 
-  @media (max-width: 1180px) { .rail { display: none; } }
-  @media (max-width: 720px) { .card { width: 86vw; } .pulse { width: 84vw; } }
+  /* =================================================================
+     RESPONSIVE TIERS  (one rule per breakpoint, consistent card sizing)
+     Layout model: rails are fixed to the viewport edges; the stage
+     reserves matching side gutters (--gutter) so the field never sits
+     under them. Cards size from --cardw. The stage scrolls when tall.
+     ================================================================= */
+  :root { --gutter: 5vw; --cardw: 320px; }
+  .stage { padding-left: var(--gutter); padding-right: var(--gutter); padding-top: 4vh; padding-bottom: 4vh; }
+
+  /* XL — wide screens: ambient bg cards + rails */
+  @media (min-width: 1500px) {
+    .bgcards { display: block; }
+    :root { --gutter: 230px; --cardw: 320px; }
+  }
+
+  /* L — desktop/laptop: rails, no bg cards, three cards in a row */
+  @media (min-width: 1101px) and (max-width: 1499px) {
+    .bgcards { display: none; }
+    .rail { width: 160px; }
+    :root { --gutter: 196px; --cardw: 300px; }
+  }
+
+  /* M — small laptop / large tablet: rails hidden, roomy multi-card row */
+  @media (min-width: 901px) and (max-width: 1100px) {
+    .rail { display: none; }
+    .bgcards { display: none; }
+    :root { --gutter: 4vw; --cardw: 300px; }
+  }
+
+  /* S — tablet / small laptop: rails hidden, cards stack and the page scrolls */
+  @media (min-width: 641px) and (max-width: 900px) {
+    .rail { display: none; }
+    .bgcards { display: none; }
+    :root { --cardw: min(460px, 90vw); }
+    .stage { justify-content: flex-start; padding: 72px 24px 130px; }
+    .cards { flex-direction: column; align-items: center; }
+    .horizon { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+      width: calc(100% - 48px); max-width: 600px; margin: 0; z-index: 40; }
+    .suzy { bottom: 96px; }
+  }
+
+  /* XS — phones: single centered column, compact card internals */
+  @media (max-width: 640px) {
+    .rail, .bgcards, .brand { display: none; }
+    :root { --cardw: 100%; }
+    .stage { justify-content: flex-start; padding: 16px 16px 116px; }
+    .field { perspective: none; margin-top: 6px; }
+    .cards { flex-direction: column; align-items: center; gap: 12px; }
+    /* compact card sizing for phones */
+    .card { width: 100%; max-width: 440px; min-height: 0; padding: 16px; border-radius: 18px; }
+    .card .glyph { width: 32px; height: 32px; font-size: 16px; }
+    .card .title { font-size: 14px; }
+    .card .body { font-size: 13px; }
+    .card .body .big { font-size: 21px; }
+    .card .head { margin-bottom: 12px; }
+    .btn { padding: 9px 12px; font-size: 12.5px; }
+    .surface .work { min-height: 96px; }
+    .origin { position: static; transform: none; margin: 0 auto 10px; }
+    .origin.show { transform: none; }
+    .suzy { position: static; transform: none; width: 100%; max-width: 440px; margin: 4px auto 14px; opacity: 1; pointer-events: auto; }
+    .suzy:not(.show) { display: none; }
+    .horizon { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
+      width: calc(100% - 24px); max-width: 560px; margin: 0; z-index: 40; }
+    .chips { margin-bottom: 10px; }
+    .intent input { font-size: 16px; }                 /* ≥16px avoids iOS zoom */
+    /* coverflow collapses to a plain stack on phones */
+    .cards.flow { min-height: 0; }
+    .cards.flow .card { position: static; transform: none !important; opacity: 1 !important; filter: none !important; }
+    .cards.flow .card .detail { display: none; }
+    .card.focused .detail { display: block; }
+    .flow-nav { display: none !important; }
+  }
+
+  /* tiny phones */
+  @media (max-width: 380px) {
+    .detail .trays { grid-template-columns: 1fr; }
+    .intent { gap: 8px; padding: 6px 6px 6px 16px; }
+    .go { width: 42px; height: 42px; font-size: 17px; } .mic { width: 40px; height: 40px; }
+    .chip { font-size: 11.5px; padding: 7px 11px; }
+    .greet .row { flex-direction: column; width: 100%; }
+    .greet .big-btn, .greet .btn { width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -378,6 +506,9 @@
   <div class="grain"></div>
 
   <div class="hand" id="hand"></div>
+
+  <!-- ambient background cards (People, Family, Live, proactive agents) -->
+  <div class="bgcards" id="bgcards"></div>
 
   <!-- People: presence (Work / Family) + Live feed -->
   <aside class="rail left">
@@ -406,13 +537,29 @@
     <div class="wall" id="wall"></div>
     <!-- stage 1: minimal good morning -->
     <div class="greet-inner" id="greetMinimal">
-      <div class="orb" id="greetOrb"></div>
+      <div class="greet-brand">
+        <svg class="glogo" id="greetOrb" viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+          <defs><linearGradient id="zg2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#25d0c0"/>
+          </linearGradient></defs>
+          <circle cx="20" cy="20" r="17" fill="none" stroke="url(#zg2)" stroke-width="1" opacity="0.4"/>
+          <circle cx="20" cy="20" r="5.4" fill="url(#zg2)"/>
+          <circle cx="20" cy="3" r="2.6" fill="#7c5cff"/>
+          <circle cx="35" cy="28" r="2.6" fill="#25d0c0"/>
+          <circle cx="5" cy="28" r="2.6" fill="#ff7eb6"/>
+        </svg>
+        <span class="gwm">ZAVORA<b>OS</b></span>
+      </div>
       <div class="clock" id="clock"></div>
       <h2>Good morning</h2>
+      <p class="cc" id="greetCC"></p>
       <div class="row">
         <button class="btn primary big-btn" id="greetYes">Start my day</button>
         <button class="btn" id="greetNo">Not yet</button>
       </div>
+      <p class="gtag">The OS that works while you live</p>
+      <p class="taphint" id="tapHint">tap anywhere to begin</p>
+      <button class="mute" id="greetAudio" title="Replay / mute">🔊</button>
     </div>
     <!-- stage 2: ambient (wallpaper + quote + jazz) -->
     <div class="greet-inner ambient" id="greetAmbient">
@@ -448,10 +595,28 @@
     </div>
   </div>
 
-  <div class="brand">Field OS · concept</div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 40" width="22" height="22" aria-hidden="true">
+      <defs>
+        <linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#25d0c0"/>
+        </linearGradient>
+      </defs>
+      <circle cx="20" cy="20" r="17" fill="none" stroke="url(#zg)" stroke-width="1" opacity="0.35"/>
+      <circle cx="20" cy="20" r="5.4" fill="url(#zg)"/>
+      <circle cx="20" cy="3"  r="2.6" fill="#7c5cff"/>
+      <circle cx="35" cy="28" r="2.6" fill="#25d0c0"/>
+      <circle cx="5"  cy="28" r="2.6" fill="#ff7eb6"/>
+    </svg>
+    <span class="wm">ZAVORA<b>OS</b></span>
+    <span class="tag">The OS that works while you live</span>
+  </div>
 
 <script>
 const cardsEl = document.getElementById('cards');
+// layout helpers — keep JS behaviour aligned with the CSS tiers
+const isStacked = () => innerWidth <= 900;   // cards stack & scroll (S, XS): no coverflow / drag
+const noParallax = () => innerWidth <= 1100;  // M and below: no pointer parallax
 const input = document.getElementById('intent');
 const chips = document.getElementById('chips');
 const origin = document.getElementById('origin');
@@ -587,6 +752,7 @@ function attachVerbs(card){
   el.addEventListener('pointerdown', e => {
     if (e.target.closest('.btn')) return;
     if (cardsEl.classList.contains('flow')) return;   // carousel handles its own clicks
+    if (isStacked()) return;                           // stacked tiers: let the page scroll; tap = focus
     down = { x:e.clientX, y:e.clientY, ox:el.offsetLeft, oy:el.offsetTop };
     moved=false; vx=vy=0; lastX=e.clientX; lastY=e.clientY; lastT=performance.now();
     el.setPointerCapture(e.pointerId);
@@ -619,6 +785,7 @@ function attachVerbs(card){
 }
 
 function focusCard(el){
+  if (isStacked()) { el.classList.toggle('focused'); return; }   // stacked tiers: inline detail, no coverflow
   const cards = [...document.querySelectorAll('.card')];
   if (cardsEl.classList.contains('flow') && el.classList.contains('focused')) return exitFlow();
   flowEnter(cards.indexOf(el));
@@ -658,7 +825,8 @@ function layoutFlow(){
     c.classList.toggle('focused', off === 0);
     if (off === 0) { c.style.transform = ''; return; }
     const a = Math.abs(off);
-    c.style.setProperty('--x', `${off * 230}px`);
+    const step = Math.min(230, innerWidth * 0.22);   // responsive ring spacing
+    c.style.setProperty('--x', `${off * step}px`);
     c.style.setProperty('--s', `${Math.max(.45, .72 - (a-1)*.12)}`);
     c.style.setProperty('--ry', `${off > 0 ? -34 : 34}deg`);
     c.style.setProperty('--op', `${Math.max(.18, .6 - (a-1)*.2)}`);
@@ -678,6 +846,12 @@ document.addEventListener('keydown', e => {
 });
 // clicking a side card brings it to front
 cardsEl.addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (e.target.closest('.btn')) return;
+  if (isStacked()) {                       // stacked tiers: tap toggles inline detail
+    if (card) focusCard(card);
+    return;
+  }
   if (!cardsEl.classList.contains('flow')) return;
   const c = e.target.closest('.card');
   if (c && !c.classList.contains('focused')) {
@@ -927,6 +1101,7 @@ function sfx(type){
       drop:   { type:'sine',     f:[420,260], dur:.18, vol:.16 }, // gentle thunk
       fuse:   { type:'triangle', f:[440,880], dur:.30, vol:.16 }, // bright merge
       ding:   { type:'sine',     f:[880,1320],dur:.34, vol:.2  }, // success ding
+      click:  { type:'sine',     f:[660,520], dur:.06, vol:.12 }, // soft tap
     }[type] || { type:'sine', f:[440,440], dur:.2, vol:.15 };
     o.type = map.type;
     o.frequency.setValueAtTime(map.f[0], t);
@@ -936,19 +1111,34 @@ function sfx(type){
     o.start(t); o.stop(t + map.dur + .02);
   } catch(e){}
 }
-async function speak(arg){
+// soft click sound on interactive elements
+document.addEventListener('pointerdown', e => {
+  if (e.target.closest('.btn, .chip, .card, .bgcard, .tile, .mic, .go, .mute, .flow-nav, .lf-dots i')) sfx('click');
+}, true);
+async function speak(arg, onAudio){
   const id = clipFor(arg);
   try {
     const audio = new Audio(`audio/${id}.wav`);
     drive(audio);                       // bubble follows the voice
+    if (onAudio) onAudio(audio);
     await audio.play();
+    return true;
   } catch (e){
-    console.warn('clip play failed:', id, e.message);
+    // NotAllowedError = browser autoplay block before any user gesture — expected, will play on first tap
+    if (e.name !== 'NotAllowedError') console.warn('clip play failed:', id, e.message);
+    return false;
   }
 }
 
 // Make the bubble pulse to the live audio amplitude
 function drive(audio){
+  // On file://, routing through an analyser silences the clip (CORS taint) — just pulse.
+  if (location.protocol === 'file:') {
+    voiceTarget().classList.add('speaking');
+    const off = () => voiceTarget().classList.remove('speaking');
+    audio.addEventListener('ended', off); audio.addEventListener('pause', off);
+    return;
+  }
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -1057,19 +1247,29 @@ document.querySelector('.field').addEventListener('click', e => {
 // ---- depth parallax (living 3D without navigation) ----
 let raf;
 document.addEventListener('pointermove', e => {
+  if (noParallax()) return;                            // tablet/mobile: no pointer parallax
   if (cardsEl.classList.contains('flow')) return;
   if (document.querySelector('.card.grabbed')) return; // don't fight a drag
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
     const cx = (e.clientX / innerWidth - .5);
     const cy = (e.clientY / innerHeight - .5);
+    const wide = innerWidth > 1340;                    // only tilt with real breathing room
     document.querySelectorAll('.card').forEach(c => {
       if (c.classList.contains('grabbed') || c.style.opacity === '0') return;
-      c.style.transform = `translate(${cx*22*d(c)}px, ${cy*16*d(c)}px) rotateY(${cx*5}deg) rotateX(${-cy*5}deg)`;
+      const t = wide ? `translate(${cx*16*d(c)}px, ${cy*12*d(c)}px) rotateY(${cx*4}deg) rotateX(${-cy*4}deg)`
+                     : `translate(${cx*10*d(c)}px, ${cy*8*d(c)}px)`;
+      c.style.transform = t;
     });
   });
 });
 function d(c){ return parseFloat(c.dataset.depth || 1); }
+// keep carousel correct across orientation/resize
+addEventListener('resize', () => {
+  if (cardsEl.classList.contains('flow')) { layoutFlow(); return; }
+  // wipe any leftover parallax transforms so cards render flat after a tier change
+  document.querySelectorAll('.card').forEach(c => { c.style.transform = ''; });
+});
 
 // ---------- People rail ----------
 const people = {
@@ -1135,6 +1335,52 @@ lfGo(0); lfAuto();
     const dx = e.clientX - sx;
     if (dx < -30) lfGo(lfIdx+1); else if (dx > 30) lfGo(lfIdx-1);
     sx=null; lfAuto();
+  });
+})();
+
+// ---------- ambient background cards: flank the field, dimmed, clickable ----------
+(() => {
+  const bg = document.getElementById('bgcards');
+  const card = (title, sub, icon, rows, act) => `
+    <div class="bgcard">
+      <div class="bc-head"><div class="bc-ic">${icon}</div>
+        <div><div class="bc-title">${title}</div><div class="bc-sub">${sub}</div></div></div>
+      ${rows}<div class="bc-row bc-act"><small style="margin:0">${act}</small></div></div>`;
+  const peopleRows = arr => arr.map(a => `<div class="bc-row">${a[1]}<small>${a[2]}</small></div>`).join('');
+  const cards = [
+    { side:'l', y:14, kind:'people', intent:'Start my day',
+      html: card('People', 'work', '👥', peopleRows(people.work), 'Alex is typing…'),
+      acts:['Alex is typing…','Priya joined a call','#dev-team: 3 new'] },
+    { side:'l', y:52, kind:'family', intent:'Start my day',
+      html: card('Family', 'close', '🏡', peopleRows(people.family), 'Mara shared a photo'),
+      acts:['Mara shared a photo','Dad called twice','All quiet at home'] },
+    { side:'r', y:12, kind:'live', intent:'Summarize what changed this week',
+      html: card('Live', 'CNN · Bloomberg · X', '📡',
+        sources.slice(0,3).map(s => `<div class="bc-row">${s.name}<small>${s.when}</small></div>`).join(''),
+        'CNN: breaking…'),
+      acts:['CNN: breaking…','Bloomberg: markets up','X: trending now'] },
+  ];
+  proactiveAgents.forEach((a, i) => cards.push({
+    side: i % 2 ? 'l' : 'r', y: 70 + i*9, kind:'proactive', intent:'Build me a pitch deck',
+    html: card(a.name, 'proactive', a.glyph, '', a.tasks[0]), acts: a.tasks,
+  }));
+  bg.innerHTML = cards.map(c => `<div class="bg-slot" data-side="${c.side}" data-y="${c.y}">${c.html}</div>`).join('');
+  bg.querySelectorAll('.bg-slot').forEach((slot, i) => {
+    const c = cards[i], el = slot.firstElementChild;
+    const left = c.side === 'l';
+    el.style.top = c.y + 'vh';
+    el.style[left ? 'left' : 'right'] = '210px';
+    el.style.transform = `rotateY(${left ? 14 : -14}deg) scale(.9)`;
+    // subtle, slow activity rotation (no motion, just a gentle text fade)
+    const actEl = el.querySelector('.bc-act small');
+    let k = 0;
+    setInterval(() => {
+      k = (k + 1) % c.acts.length;
+      actEl.style.opacity = 0;
+      setTimeout(() => { actEl.textContent = c.acts[k]; actEl.style.opacity = .8; }, 400);
+    }, 5200 + i*900);   // staggered so they never blink together
+    // click → bring this surface into the field
+    el.addEventListener('click', () => { input.value = c.intent; submitIntent(c.intent); });
   });
 })();
 
@@ -1276,14 +1522,38 @@ function tickClock(){
   const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   clockEl.textContent = t; clock2.textContent = t;
 }
+const GREETING_LINE = "Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon.";
+const greetCC = document.getElementById('greetCC');
+let greetingPlayed = false;
+async function playGreeting(){
+  // build the caption as word spans for synced reveal
+  const words = GREETING_LINE.split(' ');
+  greetCC.innerHTML = words.map(w => `<span class="w">${w}</span>`).join(' ');
+  greetCC.classList.add('show');
+  const spans = [...greetCC.querySelectorAll('.w')];
+  const ok = await speak('greeting', audio => {
+    const lit = () => {
+      const p = audio.duration ? audio.currentTime / audio.duration : 0;
+      const n = Math.round(p * spans.length);
+      spans.forEach((s, i) => s.classList.toggle('lit', i < n));
+    };
+    audio.addEventListener('timeupdate', lit);
+    audio.addEventListener('ended', () => spans.forEach(s => s.classList.add('lit')));
+  });
+  if (ok) { greetingPlayed = true; document.getElementById('tapHint')?.classList.add('gone'); }
+  else spans.forEach(s => s.classList.add('lit'));   // no audio → just show full text
+}
 let wallTimer, clockTimer, idleTimer;
-function openGreeting(){          // stage 1: minimal
+function openGreeting(){          // stage 1: minimal (pre-login)
   greet.classList.add('show');
   tickClock(); clockTimer = setInterval(tickClock, 10000);
+  // try to greet immediately; if autoplay is blocked, the first interaction will trigger it
+  playGreeting();
   idleTimer = setTimeout(() => {   // no action in 5 min → drift to ambient
     if (greet.classList.contains('show') && !greet.classList.contains('ambient-on')) enterAmbient();
   }, 5 * 60 * 1000);
 }
+document.getElementById('greetAudio').addEventListener('click', e => { e.stopPropagation(); playGreeting(); });
 function enterAmbient(){          // stage 2: wallpaper + quote + jazz
   clearTimeout(idleTimer);
   greet.classList.add('ambient-on');
@@ -1295,18 +1565,21 @@ function startDay(){
   clearInterval(wallTimer); clearInterval(clockTimer);
   fadeJazz();
   greet.classList.remove('show');
-  setTimeout(() => speak('greeting'), 700);
-  setTimeout(() => launch('morning'), 1100);
+  setTimeout(() => launch('morning'), 700);
 }
 document.getElementById('greetYes').addEventListener('click', startDay);
 document.getElementById('greetYes2').addEventListener('click', startDay);
 document.getElementById('greetNo').addEventListener('click', enterAmbient);
 // greet on first load
 window.addEventListener('load', () => setTimeout(openGreeting, 500));
-// browsers block autoplay — start jazz on first interaction once in ambient stage
-const kickJazz = () => { if (greet.classList.contains('ambient-on')) startJazz(); };
-window.addEventListener('pointerdown', kickJazz);
-window.addEventListener('keydown', kickJazz);
+// browsers block autoplay — on first interaction, ensure greeting played and jazz can start
+const kickAudio = () => {
+  document.getElementById('tapHint')?.classList.add('gone');
+  if (greet.classList.contains('show') && !greet.classList.contains('ambient-on') && !greetingPlayed) playGreeting();
+  if (greet.classList.contains('ambient-on')) startJazz();
+};
+window.addEventListener('pointerdown', kickAudio);
+window.addEventListener('keydown', kickAudio);
 
 // ---------- #3  Conducting: the OS performs VerbUI gestures from your intent ----------
 const hand = document.getElementById('hand');
