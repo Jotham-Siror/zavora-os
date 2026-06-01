@@ -1,0 +1,12 @@
+[package]
+name = "spatial-os"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Default features = "minimal" → agents, models, gemini, runner, sessions
+adk-rust = { path = "../adk-rust/adk-rust" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
+futures = "0.3"
+anyhow = "1"
+dotenvy = "0.15"

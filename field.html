@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Field — a 2030 OS concept</title>
+<style>
+  :root {
+    --bg0: #070a12;
+    --bg1: #0b1020;
+    --ink: #eef2ff;
+    --muted: #9aa4c4;
+    --glass: rgba(20, 27, 48, 0.55);
+    --stroke: rgba(150, 170, 255, 0.14);
+    --accent-a: #7c5cff;
+    --accent-b: #25d0c0;
+    --accent-c: #ff7eb6;
+    --spring: cubic-bezier(.22, 1, .36, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    color: var(--ink);
+    background: radial-gradient(140% 120% at 50% 8%, var(--bg1), var(--bg0) 60%);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- ambient living background ---------- */
+  .aurora { position: fixed; inset: -20% -10%; z-index: 0; filter: blur(60px); opacity: .55; pointer-events: none; }
+  .blob { position: absolute; border-radius: 50%; mix-blend-mode: screen; will-change: transform; }
+  .b1 { width: 50vw; height: 50vw; left: 8%; top: 2%;
+        background: radial-gradient(circle, rgba(124,92,255,.9), transparent 60%);
+        animation: drift1 26s ease-in-out infinite; }
+  .b2 { width: 46vw; height: 46vw; right: 4%; top: 18%;
+        background: radial-gradient(circle, rgba(37,208,192,.75), transparent 60%);
+        animation: drift2 32s ease-in-out infinite; }
+  .b3 { width: 40vw; height: 40vw; left: 30%; bottom: -10%;
+        background: radial-gradient(circle, rgba(255,126,182,.6), transparent 60%);
+        animation: drift3 38s ease-in-out infinite; }
+  @keyframes drift1 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6vw,4vh) scale(1.12)} }
+  @keyframes drift2 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(-5vw,5vh) scale(1.08)} }
+  @keyframes drift3 { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(3vw,-4vh) scale(1.15)} }
+  .grain { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+  /* ---------- stage ---------- */
+  .stage { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 4vh 5vw; }
+
+  /* origin / causality chip */
+  .origin { position: fixed; top: 26px; left: 50%; transform: translateX(-50%) translateY(-12px);
+    display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(18px);
+    font-size: 13px; color: var(--muted); opacity: 0; transition: all .6s var(--spring); white-space: nowrap; }
+  .origin.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .origin .dot { width: 8px; height: 8px; border-radius: 50%;
+    background: linear-gradient(120deg, var(--accent-a), var(--accent-b)); box-shadow: 0 0 12px var(--accent-a); }
+  .origin b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- card field ---------- */
+  .field { position: relative; z-index: 2; width: 100%; max-width: 1180px; flex: 1;
+    display: flex; align-items: center; justify-content: center; perspective: 1600px; }
+  .cards { display: flex; gap: 26px; align-items: stretch; justify-content: center;
+    flex-wrap: wrap; width: 100%; transition: filter .5s var(--spring); transform-style: preserve-3d; }
+
+  .card { position: relative; width: 320px; min-height: 300px; padding: 22px;
+    border-radius: 22px; background: var(--glass); border: 1px solid var(--stroke);
+    backdrop-filter: blur(26px) saturate(140%); -webkit-backdrop-filter: blur(26px) saturate(140%);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.06);
+    display: flex; flex-direction: column; cursor: pointer; will-change: transform, opacity;
+    transition: transform .6s var(--spring), opacity .5s var(--spring), box-shadow .5s var(--spring);
+    transform-style: preserve-3d; }
+  .card::before { content: ""; position: absolute; inset: 0; border-radius: 22px; padding: 1px;
+    background: linear-gradient(135deg, rgba(124,92,255,.5), transparent 40%, rgba(37,208,192,.4));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; opacity: .6; pointer-events: none; }
+
+  .card .head { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
+  .card .glyph { width: 38px; height: 38px; border-radius: 12px; flex: none; display: grid; place-items: center;
+    font-size: 18px; background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(37,208,192,.25));
+    border: 1px solid var(--stroke); }
+  .card .title { font-size: 15px; font-weight: 650; letter-spacing: .2px; }
+  .card .agent { font-size: 11.5px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .status { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-b); box-shadow: 0 0 10px var(--accent-b); }
+  .status.working { background: #ffd166; box-shadow: 0 0 10px #ffd166; animation: pulse 1s ease-in-out infinite; }
+  .status.idle { background: #4a5578; box-shadow: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .card .body { font-size: 13.5px; line-height: 1.6; color: #d6ddf5; flex: 1; }
+  .card .body .line { opacity: 0; transform: translateY(6px); animation: rise .5s var(--spring) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .card .body .big { font-size: 26px; font-weight: 700; letter-spacing: -.5px; margin: 2px 0 4px;
+    background: linear-gradient(120deg, #fff, #c9d2ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .card .body .sub { color: var(--muted); font-size: 12.5px; }
+  .skel { height: 12px; border-radius: 6px; margin: 10px 0;
+    background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(255,255,255,.12), rgba(255,255,255,.04));
+    background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  .skel.s2 { width: 80%; } .skel.s3 { width: 60%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  .act { margin-top: 16px; display: flex; gap: 10px; opacity: 0; transform: translateY(8px);
+    transition: all .5s var(--spring); }
+  .act.show { opacity: 1; transform: none; }
+  .btn { flex: 1; padding: 11px 14px; border-radius: 13px; border: 1px solid var(--stroke);
+    background: rgba(255,255,255,.04); color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all .25s ease; }
+  .btn:hover { background: rgba(255,255,255,.1); transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(120deg, var(--accent-a), #5b7cff); border: none;
+    box-shadow: 0 10px 30px -10px var(--accent-a); }
+  .btn.primary:hover { box-shadow: 0 14px 40px -10px var(--accent-a); }
+  .btn.done { background: linear-gradient(120deg, rgba(37,208,192,.25), rgba(37,208,192,.12)); border-color: rgba(37,208,192,.4); }
+
+  /* focus mode */
+  .cards.has-focus .card:not(.focused) { opacity: .28; transform: scale(.86) translateY(10px); filter: blur(2px); }
+  .card.focused { transform: scale(1.12) translateY(-6px); z-index: 5;
+    box-shadow: 0 50px 120px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(124,92,255,.4); cursor: default; }
+
+  /* ---------- intent line (the horizon) ---------- */
+  .horizon { position: relative; z-index: 3; width: 100%; max-width: 760px; margin-top: 8px; }
+  .chips { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap;
+    transition: opacity .5s ease, transform .5s var(--spring); }
+  .chips.hide { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .chip { padding: 8px 15px; border-radius: 999px; font-size: 12.5px; color: var(--muted);
+    background: rgba(255,255,255,.03); border: 1px solid var(--stroke); cursor: pointer; transition: all .25s ease; }
+  .chip:hover { color: var(--ink); background: rgba(255,255,255,.08); transform: translateY(-1px); }
+
+  .intent { display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 22px;
+    border-radius: 999px; background: var(--glass); border: 1px solid var(--stroke);
+    backdrop-filter: blur(24px); box-shadow: 0 24px 60px -24px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07);
+    transition: box-shadow .4s var(--spring), border-color .4s ease; }
+  .intent:focus-within { border-color: rgba(124,92,255,.55);
+    box-shadow: 0 0 0 4px rgba(124,92,255,.14), 0 24px 70px -20px rgba(124,92,255,.5); }
+  .intent .spark { width: 11px; height: 11px; border-radius: 50%; flex: none;
+    background: linear-gradient(120deg, var(--accent-a), var(--accent-b)); box-shadow: 0 0 16px var(--accent-a);
+    animation: breathe 3s ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{transform:scale(1);opacity:.9} 50%{transform:scale(1.35);opacity:1} }
+  .intent input { flex: 1; background: none; border: none; outline: none; color: var(--ink);
+    font-size: 17px; font-weight: 450; padding: 14px 0; }
+  .intent input::placeholder { color: var(--muted); }
+  .go { width: 46px; height: 46px; flex: none; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(120deg, var(--accent-a), #5b7cff); color: #fff; font-size: 19px;
+    box-shadow: 0 12px 30px -8px var(--accent-a); transition: transform .25s var(--spring); }
+  .go:hover { transform: scale(1.08); } .go:active { transform: scale(.94); }
+
+  /* mic / speak */
+  .mic { width: 44px; height: 44px; flex: none; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,.05); border: 1px solid var(--stroke); color: var(--muted);
+    font-size: 17px; display: grid; place-items: center; transition: all .25s var(--spring); position: relative; }
+  .mic:hover { color: var(--ink); background: rgba(255,255,255,.1); }
+  .mic.listening { color: #fff; border-color: var(--accent-c);
+    background: linear-gradient(120deg, var(--accent-c), #ff5c8a); }
+  .mic.listening::after { content: ""; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid var(--accent-c); animation: ring 1.2s ease-out infinite; }
+  @keyframes ring { 0%{transform:scale(.9);opacity:.8} 100%{transform:scale(1.6);opacity:0} }
+
+  /* Suzy — the voice/summary persona */
+  .suzy { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-14px);
+    display: flex; align-items: flex-start; gap: 12px; max-width: 620px; padding: 14px 20px;
+    border-radius: 18px; background: var(--glass); border: 1px solid var(--stroke);
+    backdrop-filter: blur(20px); box-shadow: 0 24px 60px -28px rgba(0,0,0,.8);
+    opacity: 0; pointer-events: none; transition: all .6s var(--spring); z-index: 4; }
+  .suzy.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .suzy .face { width: 30px; height: 30px; flex: none; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-c), var(--accent-a));
+    display: grid; place-items: center; font-size: 15px;
+    --amp: 0;
+    transform: scale(calc(1 + var(--amp) * 0.6));
+    box-shadow: 0 0 calc(12px + var(--amp) * 34px) rgba(255,126,182, calc(0.45 + var(--amp) * 0.55));
+    transition: transform .06s linear, box-shadow .06s linear; }
+  .suzy .face.speaking { animation: breathe 1.2s ease-in-out infinite; }
+  .suzy .text { font-size: 14.5px; line-height: 1.55; color: #e7ebff; }
+  .suzy .text b { color: #fff; font-weight: 650; }
+
+  .brand { position: fixed; bottom: 18px; left: 0; right: 0; text-align: center; z-index: 3;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(154,164,196,.5); }
+
+  @media (max-width: 720px) { .card { width: 86vw; } .cards.has-focus .card:not(.focused){display:none;} }
+</style>
+</head>
+<body>
+  <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+  <div class="grain"></div>
+
+  <div class="origin" id="origin"><span class="dot"></span><span>From your intent &nbsp;·&nbsp; <b id="originText"></b></span></div>
+
+  <div class="suzy" id="suzy"><div class="face" id="suzyFace">✦</div><div class="text" id="suzyText"></div></div>
+
+  <div class="stage">
+    <div class="field"><div class="cards" id="cards"></div></div>
+
+    <div class="horizon">
+      <div class="chips" id="chips">
+        <div class="chip" data-intent="Plan a weekend trip to Lisbon">✈️ Plan a weekend in Lisbon</div>
+        <div class="chip" data-intent="Get my morning ready">☀️ Get my morning ready</div>
+        <div class="chip" data-intent="Summarize what changed this week">📊 Summarize my week</div>
+      </div>
+      <div class="intent">
+        <span class="spark"></span>
+        <input id="intent" placeholder="What do you want to do?" autocomplete="off" />
+        <button class="mic" id="mic" title="Speak">🎤</button>
+        <button class="go" id="go" title="Begin">↑</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand">Field OS · concept</div>
+
+<script>
+const cardsEl = document.getElementById('cards');
+const input = document.getElementById('intent');
+const chips = document.getElementById('chips');
+const origin = document.getElementById('origin');
+const originText = document.getElementById('originText');
+
+// ---- scenarios: each agent-app is a card that streams work then resolves ----
+const scenarios = {
+  lisbon: [
+    { glyph:'✈️', title:'Flights', agent:'travel.agent', delay:0,
+      stream:['Scanning 40+ carriers for Lisbon…','Comparing price vs. travel time…'],
+      resolve:{ big:'$284 · TAP Air', sub:'Fri 6:40pm → Sun 9:15pm · 1 stop', actions:['Hold seat','Compare'] } },
+    { glyph:'🏠', title:'Stay', agent:'stay.agent', delay:250,
+      stream:['Matching neighborhoods to your taste…','Filtering for walkable + great views…'],
+      resolve:{ big:'Alfama loft', sub:'$96/night · 9.4 · river view · free cancel', actions:['Reserve','See 6 more'] } },
+    { glyph:'🗺️', title:'Itinerary', agent:'planner.agent', delay:500, waitsFor:2,
+      stream:['Waiting for flights & stay…'],
+      resolve:{ lines:['<b>Fri</b> — arrive, sunset at Miradouro','<b>Sat</b> — Sintra day trip, dinner in Alfama','<b>Sun</b> — Time Out Market, fly home'], actions:['Save plan','Tweak'] } },
+  ],
+  morning: [
+    { glyph:'📅', title:'Today', agent:'calendar.agent', delay:0,
+      stream:['Reading your calendar…'],
+      resolve:{ big:'3 meetings', sub:'First: Standup 9:30 · gap 12–2pm free', actions:['Open','Reschedule'] } },
+    { glyph:'✉️', title:'Needs you', agent:'inbox.agent', delay:250,
+      stream:['Triaging 38 new emails…','Surfacing only what matters…'],
+      resolve:{ big:'2 to reply', sub:'Client contract · Mara re: launch date', actions:['Draft replies','Snooze'] } },
+    { glyph:'📰', title:'Brief', agent:'news.agent', delay:500, waitsFor:2,
+      stream:['Composing your brief…'],
+      resolve:{ lines:['Markets up 0.6% pre-open','Your repo: 3 PRs awaiting review','Rain clears by noon — bike home'], actions:['Read aloud','Dismiss'] } },
+  ],
+  week: [
+    { glyph:'💸', title:'Money', agent:'finance.agent', delay:0,
+      stream:['Reconciling accounts…'],
+      resolve:{ big:'−$1,240', sub:'vs last week · mostly travel + groceries', actions:['Breakdown','Set limit'] } },
+    { glyph:'💪', title:'Health', agent:'health.agent', delay:250,
+      stream:['Reading activity & sleep…'],
+      resolve:{ big:'6.1h avg sleep', sub:'Down 12% · 3 workouts · steps steady', actions:['Tips','Plan rest'] } },
+    { glyph:'🧠', title:'Focus', agent:'work.agent', delay:500, waitsFor:2,
+      stream:['Looking across your week…'],
+      resolve:{ lines:['Shipped 14 commits, 2 features','Most focused: Tue mornings','Suggest: protect Tue 9–12 next week'], actions:['Apply','Ignore'] } },
+  ],
+};
+
+function pickScenario(text){
+  const t = text.toLowerCase();
+  if (t.includes('morning') || t.includes('ready')) return 'morning';
+  if (t.includes('week') || t.includes('summar')) return 'week';
+  return 'lisbon';
+}
+
+// Suzy's concise spoken/written summary once the agents settle
+const suzySummaries = {
+  lisbon: 'You can be in Lisbon Friday night for <b>$284</b>, staying at a riverside Alfama loft for <b>$96 a night</b>. I drafted a 3-day plan — just say the word and I’ll hold both.',
+  morning: 'Good morning. You have <b>3 meetings</b>, a free window <b>12–2pm</b>, and <b>2 emails</b> that actually need you. Everything else I’ve handled.',
+  week: 'This week you spent <b>$1,240</b> — mostly travel and groceries — slept <b>6.1h</b> a night, and shipped <b>14 commits</b>. My one suggestion: protect Tuesday mornings.',
+};
+
+let resolvedCount = 0;
+let currentKey = 'lisbon';
+let totalCards = 0;
+
+function launch(text){
+  if (!text.trim()) return;
+  currentKey = pickScenario(text);
+  const spec = scenarios[currentKey];
+  resolvedCount = 0; totalCards = spec.length;
+  chips.classList.add('hide');
+  suzy.classList.remove('show');
+  originText.textContent = text;
+  origin.classList.add('show');
+  cardsEl.classList.remove('has-focus');
+  cardsEl.innerHTML = '';
+
+  spec.forEach((s, i) => {
+    const card = buildCard(s);
+    cardsEl.appendChild(card.el);
+    // bloom in, staggered
+    card.el.animate(
+      [{ opacity:0, transform:'translateY(46px) scale(.92)' },
+       { opacity:1, transform:'translateY(0) scale(1)' }],
+      { duration:760, delay:i*130, easing:'cubic-bezier(.22,1,.36,1)', fill:'backwards' });
+    // begin work
+    setTimeout(() => runCard(card, s, spec), 500 + s.delay);
+  });
+}
+
+function buildCard(s){
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.dataset.depth = (Math.random()*1.4 + .6).toFixed(2);
+  el.innerHTML = `
+    <div class="head">
+      <div class="glyph">${s.glyph}</div>
+      <div><div class="title">${s.title}</div>
+      <div class="agent"><span class="status working"></span><span class="st">working…</span> · ${s.agent}</div></div>
+    </div>
+    <div class="body"><div class="skel"></div><div class="skel s2"></div><div class="skel s3"></div></div>
+    <div class="act"></div>`;
+  const body = el.querySelector('.body');
+  const act = el.querySelector('.act');
+  const status = el.querySelector('.status');
+  const stText = el.querySelector('.st');
+
+  el.addEventListener('click', () => {
+    if (cardsEl.classList.contains('has-focus') && el.classList.contains('focused')) return;
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('focused'));
+    el.classList.add('focused');
+    cardsEl.classList.add('has-focus');
+  });
+  return { el, body, act, status, stText };
+}
+
+function runCard(card, s, spec){
+  // stream status lines
+  let i = 0;
+  card.body.innerHTML = '';
+  const note = document.createElement('div');
+  note.className = 'line sub'; card.body.appendChild(note);
+  const tick = setInterval(() => {
+    note.textContent = s.stream[Math.min(i, s.stream.length-1)];
+    i++;
+    if (i > s.stream.length) {
+      clearInterval(tick);
+      if (s.waitsFor) waitThenResolve(card, s); else resolve(card, s, spec);
+    }
+  }, 720);
+}
+
+function waitThenResolve(card, s){
+  const check = setInterval(() => {
+    if (resolvedCount >= s.waitsFor) {
+      clearInterval(check);
+      card.stText.textContent = 'composing…';
+      setTimeout(() => resolve(card, s, null), 600);
+    }
+  }, 200);
+}
+
+function resolve(card, s, spec){
+  const r = s.resolve;
+  card.body.innerHTML = '';
+  if (r.big){
+    addLine(card.body, `<div class="big">${r.big}</div>`, 0);
+    addLine(card.body, `<div class="sub">${r.sub}</div>`, 80);
+  }
+  if (r.lines){
+    r.lines.forEach((l, k) => addLine(card.body, `<div style="margin:7px 0">${l}</div>`, k*110));
+  }
+  card.status.className = 'status'; // resolved -> steady green
+  card.stText.textContent = 'done';
+
+  r.actions.forEach((label, k) => {
+    const b = document.createElement('button');
+    b.className = 'btn' + (k===0 ? ' primary' : '');
+    b.textContent = label;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      b.textContent = '✓ ' + label.replace(/^(Hold|Reserve|Save|Apply|Draft).*/, m=>m);
+      b.classList.add('done'); b.classList.remove('primary');
+    });
+    card.act.appendChild(b);
+  });
+  setTimeout(() => card.act.classList.add('show'), 120);
+  resolvedCount++;
+  if (resolvedCount >= totalCards) setTimeout(showSuzy, 500);
+}
+
+// ---- Suzy: concise summary, written + spoken ----
+const suzy = document.getElementById('suzy');
+const suzyText = document.getElementById('suzyText');
+const suzyFace = document.getElementById('suzyFace');
+
+function showSuzy(){
+  const html = suzySummaries[currentKey];
+  suzyText.innerHTML = html;
+  suzy.classList.add('show');
+  speak(suzyText.textContent);
+}
+
+// ---- Voice: Gemini TTS (cool "Despina" voice), with graceful fallback ----
+const GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
+const GEMINI_VOICE = 'Aoede'; // breezy, characterful
+
+// Persona + director's notes so the line is *performed*, not just read.
+// Clearly labels the transcript so the model speaks it (not the notes).
+function voicePrompt(text){
+  return `You are the voice of a personal operating system: warm, confident, and quietly witty — `
+    + `like a sharp friend who's genuinely glad to help and a little proud of what they just pulled off. `
+    + `Delivery: relaxed, natural pacing with a hint of a smile, gentle rises on the good news, `
+    + `a soft knowing beat before the suggestion. Not robotic, not bubbly — effortlessly cool.\n`
+    + `Read ONLY this line aloud, in character:\n"${text}"`;
+}
+
+function getKey(){
+  let k = localStorage.getItem('GEMINI_API_KEY');
+  if (!k){
+    k = prompt('Paste a Gemini API key to enable the voice (kept locally in this browser only):');
+    if (k) localStorage.setItem('GEMINI_API_KEY', k.trim());
+  }
+  return k;
+}
+
+let audioCtx;
+async function speak(text){
+  const key = getKey();
+  if (!key) return browserSpeak(text);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent?key=${encodeURIComponent(key)}`,
+      { method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          contents:[{ parts:[{ text: voicePrompt(text) }] }],
+          generationConfig:{ responseModalities:['AUDIO'],
+            speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName: GEMINI_VOICE } } } }
+        }) });
+    const json = await res.json();
+    const inline = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    if (!inline) throw new Error(json?.error?.message || 'no audio');
+    const rate = parseInt((inline.mimeType.match(/rate=(\d+)/) || [])[1] || '24000', 10);
+    const wav = pcmToWav(b64ToBytes(inline.data), rate);
+    const audio = new Audio(URL.createObjectURL(new Blob([wav], { type:'audio/wav' })));
+    drive(audio);                       // bubble follows the voice
+    await audio.play();
+  } catch (e){
+    browserSpeak(text); // fall back to built-in voice
+  }
+}
+
+// Make the bubble pulse to the live audio amplitude
+function drive(audio){
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const src = audioCtx.createMediaElementSource(audio);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.75;
+  src.connect(analyser); analyser.connect(audioCtx.destination);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  let smooth = 0, raf;
+  const loop = () => {
+    analyser.getByteFrequencyData(data);
+    let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
+    const amp = Math.min(1, (sum / data.length) / 90);   // 0..1
+    smooth += (amp - smooth) * 0.4;                       // ease
+    suzyFace.style.setProperty('--amp', smooth.toFixed(3));
+    raf = requestAnimationFrame(loop);
+  };
+  loop();
+  const stop = () => { cancelAnimationFrame(raf); suzyFace.style.setProperty('--amp', 0); };
+  audio.addEventListener('ended', stop);
+  audio.addEventListener('pause', stop);
+}
+
+function browserSpeak(text){
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.02; u.pitch = 1.05;
+  const v = speechSynthesis.getVoices().find(v => /female|samantha|zira|google us/i.test(v.name));
+  if (v) u.voice = v;
+  u.onstart = () => suzyFace.classList.add('speaking');
+  u.onend = () => suzyFace.classList.remove('speaking');
+  speechSynthesis.speak(u);
+}
+
+function b64ToBytes(b64){
+  const bin = atob(b64); const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// wrap raw PCM (16-bit mono) in a minimal WAV header so the browser can play it
+function pcmToWav(pcm, rate){
+  const blockAlign = 2, byteRate = rate * blockAlign;
+  const buf = new ArrayBuffer(44 + pcm.length); const v = new DataView(buf);
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4, 36 + pcm.length, true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,byteRate,true); v.setUint16(32,blockAlign,true);
+  v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40, pcm.length, true);
+  new Uint8Array(buf, 44).set(pcm);
+  return buf;
+}
+
+function addLine(parent, html, delay){
+  const d = document.createElement('div');
+  d.className = 'line'; d.innerHTML = html; d.style.animationDelay = delay + 'ms';
+  parent.appendChild(d);
+}
+
+// ---- interactions ----
+document.getElementById('go').addEventListener('click', () => launch(input.value));
+input.addEventListener('keydown', e => { if (e.key === 'Enter') launch(input.value); });
+chips.querySelectorAll('.chip').forEach(c =>
+  c.addEventListener('click', () => { input.value = c.dataset.intent; launch(c.dataset.intent); }));
+
+// ---- speak to it (voice input) ----
+const mic = document.getElementById('mic');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR){
+  const rec = new SR();
+  rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1;
+  let finalText = '';
+  mic.addEventListener('click', () => {
+    if (mic.classList.contains('listening')) { rec.stop(); return; }
+    finalText = ''; input.value = ''; input.placeholder = 'Listening…';
+    mic.classList.add('listening'); rec.start();
+  });
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t; else interim += t;
+    }
+    input.value = (finalText + interim).trim();
+  };
+  rec.onerror = () => { mic.classList.remove('listening'); input.placeholder = 'What do you want to do?'; };
+  rec.onend = () => {
+    mic.classList.remove('listening'); input.placeholder = 'What do you want to do?';
+    if (input.value.trim()) launch(input.value);
+  };
+} else {
+  mic.addEventListener('click', () => { input.placeholder = 'Voice needs Chrome or Safari'; });
+}
+
+// click empty space exits focus
+document.querySelector('.field').addEventListener('click', e => {
+  if (e.target === e.currentTarget || e.target === cardsEl) {
+    cardsEl.classList.remove('has-focus');
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('focused'));
+  }
+});
+
+// ---- depth parallax (living 3D without navigation) ----
+let raf;
+document.addEventListener('pointermove', e => {
+  if (cardsEl.classList.contains('has-focus')) return;
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => {
+    const cx = (e.clientX / innerWidth - .5);
+    const cy = (e.clientY / innerHeight - .5);
+    document.querySelectorAll('.card').forEach(c => {
+      const d = parseFloat(c.dataset.depth || 1);
+      c.style.transform = `translate(${cx*22*d}px, ${cy*16*d}px) rotateY(${cx*5}deg) rotateX(${-cy*5}deg)`;
+    });
+  });
+});
+</script>
+</body>
+</html>
