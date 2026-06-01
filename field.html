@@ -163,10 +163,41 @@
   .btn.primary:hover { box-shadow: 0 14px 40px -10px var(--accent-a); }
   .btn.done { background: linear-gradient(120deg, rgba(37,208,192,.25), rgba(37,208,192,.12)); border-color: rgba(37,208,192,.4); }
 
-  /* focus mode */
-  .cards.has-focus .card:not(.focused) { opacity: .28; transform: scale(.86) translateY(10px); filter: blur(2px); }
-  .card.focused { transform: scale(1.12) translateY(-6px); z-index: 5;
-    box-shadow: 0 50px 120px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(124,92,255,.4); cursor: default; }
+  /* ---------- coverflow carousel mode ---------- */
+  .cards.flow { position: relative; min-height: 420px; }
+  .cards.flow .card {
+    position: absolute; left: 50%; top: 50%; margin: 0;
+    transition: transform .55s var(--spring), opacity .55s var(--spring), filter .55s var(--spring);
+    will-change: transform; }
+  /* front (focused) card: detailed rather than oversized */
+  .cards.flow .card.focused { width: 460px; transform: translate(-50%,-50%) scale(1.04); z-index: 50; filter: none; opacity: 1;
+    box-shadow: 0 60px 140px -30px rgba(0,0,0,.95), 0 0 0 1px rgba(124,92,255,.45); cursor: default; }
+  /* detail panels — only visible on the focused (maximized) card */
+  .card .detail { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+  .cards.flow .card.focused .detail { display: block; }
+  .detail h4 { margin: 0 0 7px; font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(154,164,196,.7); }
+  .detail .arow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #d6ddf5; padding: 4px 0; }
+  .detail .arow .ai { width: 16px; height: 16px; border-radius: 5px; flex: none; display: grid; place-items: center; font-size: 9px;
+    background: rgba(124,92,255,.3); }
+  .detail .arow .prog { margin-left: auto; font-size: 10.5px; color: var(--accent-b); }
+  .detail .trays { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .detail .tray { background: rgba(10,14,28,.45); border: 1px solid var(--stroke); border-radius: 10px; padding: 9px 10px; }
+  .detail .ti { font-size: 11.5px; color: #cdd5f0; padding: 3px 0; display: flex; gap: 6px; align-items: center; }
+  .detail .ti::before { content: '•'; color: var(--muted); }
+  .detail .tray.out .ti::before { content: '↗'; color: var(--accent-b); }
+  .detail .tray .empty { font-size: 11px; color: rgba(154,164,196,.4); }
+  /* side cards: pushed back on a ring (offset/scale/blur set inline via --o) */
+  .cards.flow .card:not(.focused) {
+    transform: translate(calc(-50% + var(--x,0px)), -50%) scale(var(--s,.6)) rotateY(var(--ry,0deg));
+    opacity: var(--op,.5); filter: blur(1.5px); z-index: var(--z,1); cursor: pointer; }
+
+  .flow-nav { position: fixed; top: 50%; transform: translateY(-50%); z-index: 60;
+    width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--stroke);
+    background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font-size: 22px;
+    cursor: pointer; display: none; place-items: center; transition: all .25s var(--spring); }
+  .flow-nav:hover { background: rgba(255,255,255,.12); transform: translateY(-50%) scale(1.08); }
+  .flow-nav.show { display: grid; }
+  .flow-nav.prev { left: 30px; } .flow-nav.next { right: 30px; }
 
   /* ---------- intent line (the horizon) ---------- */
   .horizon { position: relative; z-index: 3; width: 100%; max-width: 760px; margin-top: 8px; }
@@ -213,6 +244,9 @@
     backdrop-filter: blur(20px); box-shadow: 0 24px 60px -28px rgba(0,0,0,.8);
     opacity: 0; pointer-events: none; transition: all .6s var(--spring); z-index: 4; }
   .suzy.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* in carousel mode, the summary sits at the bottom, clear of the focused card */
+  body:has(.cards.flow) .suzy { top: auto; bottom: 120px; }
+  body:has(.cards.flow) .suzy.show { transform: translateX(-50%) translateY(0); }
   .suzy .face { width: 30px; height: 30px; flex: none; border-radius: 50%;
     background: linear-gradient(135deg, var(--accent-c), var(--accent-a));
     display: grid; place-items: center; font-size: 15px;
@@ -336,7 +370,7 @@
   .greet .mute.off { opacity: .4; }
 
   @media (max-width: 1180px) { .rail { display: none; } }
-  @media (max-width: 720px) { .card { width: 86vw; } .pulse { width: 84vw; } .cards.has-focus .card:not(.focused){display:none;} }
+  @media (max-width: 720px) { .card { width: 86vw; } .pulse { width: 84vw; } }
 </style>
 </head>
 <body>
@@ -396,6 +430,8 @@
 
   <div class="stage">
     <div class="field"><div class="cards" id="cards"></div></div>
+    <button class="flow-nav prev" id="flowPrev">‹</button>
+    <button class="flow-nav next" id="flowNext">›</button>
 
     <div class="horizon">
       <div class="chips" id="chips">
@@ -440,6 +476,9 @@ const scenarios = {
       resolve:{ big:'3 meetings', sub:'First: Standup 9:30 · gap 12–2pm free', actions:['Open','Reschedule'] } },
     { glyph:'✉️', title:'Needs you', agent:'inbox.agent', delay:250, attention:true,
       stream:['Triaging 38 new emails…','Surfacing only what matters…'],
+      detail:{ actions:['Read 38 emails','Auto-archived 31','Flagged 2 as urgent','Drafted 2 replies'],
+        in:['Client contract — review','Mara: launch date?','+36 low-priority'],
+        out:['Draft: contract reply','Draft: re launch date'] },
       resolve:{ big:'2 to reply', sub:'Client contract · Mara re: launch date', actions:['Draft replies','Snooze'] } },
     { glyph:'📰', title:'Brief', agent:'news.agent', delay:500, waitsFor:2,
       stream:['Composing your brief…'],
@@ -498,7 +537,7 @@ function launch(text){
   suzy.classList.remove('show');
   originText.textContent = text;
   origin.classList.add('show');
-  cardsEl.classList.remove('has-focus');
+  exitFlow();
   cardsEl.innerHTML = '';
   resetAgents();
 
@@ -529,7 +568,8 @@ function buildCard(s){
     <div class="body"><div class="skel"></div><div class="skel s2"></div><div class="skel s3"></div></div>
     <div class="gist"></div>
     <div class="hint">✋ drag onto another card to act · fling to dismiss</div>
-    <div class="act"></div>`;
+    <div class="act"></div>
+    <div class="detail"></div>`;
   const body = el.querySelector('.body');
   const act = el.querySelector('.act');
   const status = el.querySelector('.status');
@@ -546,6 +586,7 @@ function attachVerbs(card){
 
   el.addEventListener('pointerdown', e => {
     if (e.target.closest('.btn')) return;
+    if (cardsEl.classList.contains('flow')) return;   // carousel handles its own clicks
     down = { x:e.clientX, y:e.clientY, ox:el.offsetLeft, oy:el.offsetTop };
     moved=false; vx=vy=0; lastX=e.clientX; lastY=e.clientY; lastT=performance.now();
     el.setPointerCapture(e.pointerId);
@@ -578,12 +619,71 @@ function attachVerbs(card){
 }
 
 function focusCard(el){
-  if (cardsEl.classList.contains('has-focus') && el.classList.contains('focused')) {
-    cardsEl.classList.remove('has-focus'); el.classList.remove('focused'); return;
-  }
-  document.querySelectorAll('.card').forEach(c => c.classList.remove('focused'));
-  el.classList.add('focused'); cardsEl.classList.add('has-focus');
+  const cards = [...document.querySelectorAll('.card')];
+  if (cardsEl.classList.contains('flow') && el.classList.contains('focused')) return exitFlow();
+  flowEnter(cards.indexOf(el));
 }
+
+let flowIdx = 0;
+function flowEnter(i){
+  flowIdx = i;
+  cardsEl.classList.add('flow');
+  flowPrev.classList.add('show'); flowNext.classList.add('show');
+  layoutFlow();
+}
+function exitFlow(){
+  cardsEl.classList.remove('flow');
+  flowPrev.classList.remove('show'); flowNext.classList.remove('show');
+  document.querySelectorAll('.card').forEach(c => {
+    c.classList.remove('focused');
+    c.style.removeProperty('--x'); c.style.removeProperty('--s');
+    c.style.removeProperty('--ry'); c.style.removeProperty('--op'); c.style.removeProperty('--z');
+    c.style.transform = '';
+  });
+}
+function flowRotate(dir){
+  const n = document.querySelectorAll('.card').length;
+  if (!n) return;
+  flowIdx = (flowIdx + dir + n) % n;   // circular
+  layoutFlow();
+  sfx('drop');
+}
+// place each card on a 3D ring around the focused one
+function layoutFlow(){
+  const cards = [...document.querySelectorAll('.card')];
+  const n = cards.length;
+  cards.forEach((c, i) => {
+    let off = i - flowIdx;
+    if (off > n/2) off -= n; else if (off < -n/2) off += n;   // wrap to nearest side
+    c.classList.toggle('focused', off === 0);
+    if (off === 0) { c.style.transform = ''; return; }
+    const a = Math.abs(off);
+    c.style.setProperty('--x', `${off * 230}px`);
+    c.style.setProperty('--s', `${Math.max(.45, .72 - (a-1)*.12)}`);
+    c.style.setProperty('--ry', `${off > 0 ? -34 : 34}deg`);
+    c.style.setProperty('--op', `${Math.max(.18, .6 - (a-1)*.2)}`);
+    c.style.setProperty('--z', `${20 - a}`);
+    c.style.transform = '';
+  });
+}
+const flowPrev = document.getElementById('flowPrev');
+const flowNext = document.getElementById('flowNext');
+flowPrev.addEventListener('click', e => { e.stopPropagation(); flowRotate(-1); });
+flowNext.addEventListener('click', e => { e.stopPropagation(); flowRotate(1); });
+document.addEventListener('keydown', e => {
+  if (!cardsEl.classList.contains('flow')) return;
+  if (e.key === 'ArrowLeft') flowRotate(-1);
+  else if (e.key === 'ArrowRight') flowRotate(1);
+  else if (e.key === 'Escape') exitFlow();
+});
+// clicking a side card brings it to front
+cardsEl.addEventListener('click', e => {
+  if (!cardsEl.classList.contains('flow')) return;
+  const c = e.target.closest('.card');
+  if (c && !c.classList.contains('focused')) {
+    flowEnter([...document.querySelectorAll('.card')].indexOf(c));
+  }
+});
 
 function otherCards(el){ return [...document.querySelectorAll('.card')].filter(c => c!==el); }
 function rectOf(el){ return el.getBoundingClientRect(); }
@@ -611,7 +711,7 @@ function fuse(target, source){
   target.querySelector('.status').className = 'status working';
   target.classList.add('child');
   sfx('fuse');
-  speak(`Done — I've folded your ${st.toLowerCase()} into the ${tt.toLowerCase()}.`);
+  speak('fuse');
   setTimeout(() => {
     body.innerHTML = '';
     addLine(body, `<div class="big">Updated</div>`, 0);
@@ -671,7 +771,7 @@ function maybeShowHelp(){
       <div class="line">3. Watch what's live and keep you posted</div>
       <div class="line sub" style="margin-top:12px">Ask Suzy for anything.</div>
     </div>`;
-  cardsEl.classList.remove('has-focus');
+  exitFlow();
   cardsEl.appendChild(el);
   el.animate([{opacity:0, transform:'translateY(30px) scale(.94)'},{opacity:1, transform:'none'}],
     {duration:700, easing:'cubic-bezier(.22,1,.36,1)'});
@@ -726,6 +826,22 @@ function waitThenResolve(card, s){
   }, 200);
 }
 
+// build the maximized-card detail: agent actions + in/out trays
+function fillDetail(el, s){
+  const d = el.querySelector('.detail');
+  const det = s.detail || {};
+  const actions = det.actions || (s.stream || []).map(t => t.replace(/…$/,''));
+  const inbox = det.in || ['Your request', 'Context from your day'];
+  const out = det.out || (s.resolve?.big ? [s.resolve.big] : ['Result ready']);
+  d.innerHTML = `
+    <h4>Agent actions</h4>
+    ${actions.map(a => `<div class="arow"><span class="ai">✓</span>${a}<span class="prog">done</span></div>`).join('')}
+    <div class="trays">
+      <div class="tray in"><h4>In-tray</h4>${inbox.map(t => `<div class="ti">${t}</div>`).join('') || '<div class="empty">empty</div>'}</div>
+      <div class="tray out"><h4>Out-tray</h4>${out.map(t => `<div class="ti">${t}</div>`).join('') || '<div class="empty">empty</div>'}</div>
+    </div>`;
+}
+
 function resolve(card, s, spec){
   const r = s.resolve;
   // keep the built artifact visible for surface cards; clear only the status note
@@ -747,6 +863,7 @@ function resolve(card, s, spec){
   card.el.dataset.title = s.title;
   agentDone(s);
   card.el.querySelector('.gist').textContent = r.big ? `${r.big} · ${r.sub}` : (r.lines ? r.lines[0].replace(/<[^>]+>/g,'') : s.title);
+  fillDetail(card.el, s);
 
   r.actions.forEach((label, k) => {
     const b = document.createElement('button');
@@ -788,27 +905,12 @@ const actionHints = {
   deck:    'Try: “combine” — I’ll merge them into one deck',
 };
 
-// ---- Voice: Gemini TTS only (Aoede) — no browser-speech fallback ----
-const GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
-const GEMINI_VOICE = 'Aoede'; // breezy, characterful
-
-// Persona + director's notes so the line is *performed*, not just read.
-// Clearly labels the transcript so the model speaks it (not the notes).
-function voicePrompt(text){
-  return `You are the voice of a personal operating system: warm, confident, and quietly witty — `
-    + `like a sharp friend who's genuinely glad to help and a little proud of what they just pulled off. `
-    + `Delivery: relaxed, natural pacing with a hint of a smile, gentle rises on the good news, `
-    + `a soft knowing beat before the suggestion. Not robotic, not bubbly — effortlessly cool.\n`
-    + `Read ONLY this line aloud, in character:\n"${text}"`;
-}
-
-function getKey(){
-  let k = localStorage.getItem('GEMINI_API_KEY');
-  if (!k){
-    k = prompt('Paste a Gemini API key to enable the voice (kept locally in this browser only):');
-    if (k) localStorage.setItem('GEMINI_API_KEY', k.trim());
-  }
-  return k;
+// ---- Voice: prerecorded clips (generated once via gen_audio.py) — no live TTS, no cost ----
+// Map a clip id (or summary text) → audio file in audio/.
+function clipFor(arg){
+  if (suzySummaries[arg]) return arg;                 // 'morning' | 'lisbon' | 'week' | 'deck'
+  for (const k in suzySummaries) if (suzySummaries[k].replace(/<[^>]+>/g,'') === arg) return k;
+  return arg;                                          // already an id: 'greeting','deck_done','fuse'
 }
 
 let audioCtx;
@@ -834,53 +936,46 @@ function sfx(type){
     o.start(t); o.stop(t + map.dur + .02);
   } catch(e){}
 }
-async function speak(text){
-  const key = getKey();
-  if (!key) return;                     // Gemini-only; no robotic browser voice
+async function speak(arg){
+  const id = clipFor(arg);
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent?key=${encodeURIComponent(key)}`,
-      { method:'POST', headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          contents:[{ parts:[{ text: voicePrompt(text) }] }],
-          generationConfig:{ responseModalities:['AUDIO'],
-            speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName: GEMINI_VOICE } } } }
-        }) });
-    const json = await res.json();
-    const inline = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    if (!inline) throw new Error(json?.error?.message || 'no audio');
-    const rate = parseInt((inline.mimeType.match(/rate=(\d+)/) || [])[1] || '24000', 10);
-    const wav = pcmToWav(b64ToBytes(inline.data), rate);
-    const audio = new Audio(URL.createObjectURL(new Blob([wav], { type:'audio/wav' })));
+    const audio = new Audio(`audio/${id}.wav`);
     drive(audio);                       // bubble follows the voice
     await audio.play();
   } catch (e){
-    console.warn('Gemini TTS failed:', e.message);   // silent — no fallback voice
+    console.warn('clip play failed:', id, e.message);
   }
 }
 
 // Make the bubble pulse to the live audio amplitude
 function drive(audio){
-  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  const src = audioCtx.createMediaElementSource(audio);
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.75;
-  src.connect(analyser); analyser.connect(audioCtx.destination);
-  const data = new Uint8Array(analyser.frequencyBinCount);
-  let smooth = 0, raf;
-  const loop = () => {
-    analyser.getByteFrequencyData(data);
-    let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
-    const amp = Math.min(1, (sum / data.length) / 90);   // 0..1
-    smooth += (amp - smooth) * 0.4;                       // ease
-    voiceTarget().style.setProperty('--amp', smooth.toFixed(3));
-    raf = requestAnimationFrame(loop);
-  };
-  loop();
-  const stop = () => { cancelAnimationFrame(raf); voiceTarget().style.setProperty('--amp', 0); };
-  audio.addEventListener('ended', stop);
-  audio.addEventListener('pause', stop);
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const src = audioCtx.createMediaElementSource(audio);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.75;
+    src.connect(analyser); analyser.connect(audioCtx.destination);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let smooth = 0, raf;
+    const loop = () => {
+      analyser.getByteFrequencyData(data);
+      let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
+      const amp = Math.min(1, (sum / data.length) / 90);   // 0..1
+      smooth += (amp - smooth) * 0.4;                       // ease
+      voiceTarget().style.setProperty('--amp', smooth.toFixed(3));
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    const stop = () => { cancelAnimationFrame(raf); voiceTarget().style.setProperty('--amp', 0); };
+    audio.addEventListener('ended', stop);
+    audio.addEventListener('pause', stop);
+  } catch (e){
+    // analyser unavailable (e.g. file://) — still animate with a simple pulse while playing
+    voiceTarget().classList.add('speaking');
+    const off = () => voiceTarget().classList.remove('speaking');
+    audio.addEventListener('ended', off); audio.addEventListener('pause', off);
+  }
 }
 // which element reacts to the voice — greeting orb while greeting, else the bubble
 function voiceTarget(){ return greet.classList.contains('show') ? greetOrb : suzyFace; }
@@ -956,16 +1051,13 @@ if (SR){
 
 // click empty space exits focus
 document.querySelector('.field').addEventListener('click', e => {
-  if (e.target === e.currentTarget || e.target === cardsEl) {
-    cardsEl.classList.remove('has-focus');
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('focused'));
-  }
+  if (e.target === e.currentTarget || e.target === cardsEl) exitFlow();
 });
 
 // ---- depth parallax (living 3D without navigation) ----
 let raf;
 document.addEventListener('pointermove', e => {
-  if (cardsEl.classList.contains('has-focus')) return;
+  if (cardsEl.classList.contains('flow')) return;
   if (document.querySelector('.card.grabbed')) return; // don't fight a drag
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(() => {
@@ -1203,7 +1295,7 @@ function startDay(){
   clearInterval(wallTimer); clearInterval(clockTimer);
   fadeJazz();
   greet.classList.remove('show');
-  setTimeout(() => speak("Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon."), 700);
+  setTimeout(() => speak('greeting'), 700);
   setTimeout(() => launch('morning'), 1100);
 }
 document.getElementById('greetYes').addEventListener('click', startDay);
@@ -1301,7 +1393,7 @@ function finishDeck(){
   addLine(body, `<div class="stamp">● saved · v1 · just now</div>`, 160);
   deck.querySelector('.st').textContent = 'pinned';
   sfx('ding');
-  speak('Done. I combined your numbers and story into one finished deck — ten slides, ready to present.');
+  speak('deck_done');
 }
 window.conductAction = conductAction;
 </script>
