@@ -86,6 +86,10 @@
   .resting .zzz { margin-left: auto; font-size: 12px; color: var(--muted); }
   .agents-empty { font-size: 11.5px; color: rgba(154,164,196,.45); padding: 6px 8px; }
 
+  /* proactive — agents working in the background on their own */
+  .proactive .av { background: linear-gradient(135deg, rgba(37,208,192,.4), rgba(124,92,255,.3)); }
+  .proactive .who small { color: rgba(37,208,192,.7); }
+
   /* Live — swipeable source feed (CNN · Bloomberg · X · Instagram) */
   .livefeed { position: relative; border-radius: 14px; overflow: hidden;
     background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(16px);
@@ -241,6 +245,36 @@
   .card.help .glyph { background: linear-gradient(135deg, var(--accent-c), var(--accent-a)); }
   .card.help .line { opacity: 1; transform: none; animation: none; font-size: 14px; }
 
+  /* ---------- Auto-* surfaces: agents that build real artifacts ---------- */
+  .card.surface { width: 340px; }
+  .card.surface .agent::before { content: 'AUTO'; font-size: 8px; font-weight: 800; letter-spacing: 1px;
+    padding: 1px 5px; border-radius: 4px; margin-right: 6px; color: #0a0e1a;
+    background: linear-gradient(120deg, var(--accent-b), #7cf0e4); }
+  .surface .work { margin: 6px 0 4px; border-radius: 12px; min-height: 120px; padding: 10px;
+    background: rgba(10,14,28,.5); border: 1px solid var(--stroke); position: relative; overflow: hidden; }
+  .surface .caret { display: inline-block; width: 2px; height: 13px; background: var(--accent-b);
+    vertical-align: -2px; margin-left: 1px; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  /* slides filmstrip */
+  .film { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .film .sl { aspect-ratio: 16/10; border-radius: 6px; background: rgba(255,255,255,.05);
+    border: 1px solid var(--stroke); opacity: 0; transform: scale(.8); display: grid; place-items: center;
+    font-size: 9px; color: var(--muted); }
+  .film .sl.in { opacity: 1; transform: none; transition: all .4s var(--spring);
+    background: linear-gradient(135deg, rgba(124,92,255,.22), rgba(37,208,192,.14)); }
+  /* doc lines */
+  .doc .ln { height: 7px; border-radius: 4px; background: rgba(255,255,255,.1); margin: 7px 2px; width: 0;
+    transition: width .5s var(--spring); }
+  /* sheet grid */
+  .sheet { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .sheet i { height: 16px; border-radius: 3px; background: rgba(255,255,255,.06); opacity: 0; transition: opacity .25s; }
+  .sheet i.in { opacity: 1; } .sheet i.h { background: rgba(37,208,192,.3); }
+  /* pinned (committed artifact persists) */
+  .card.pinned { box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(37,208,192,.5); }
+  .card.pinned .stamp { font-size: 10.5px; color: var(--accent-b); margin-top: 6px; }
+  /* combine flash */
+  .card.combining { animation: fusePulse .6s var(--spring); }
+
   /* ---------- attention tier: a card that needs you ---------- */
   .card.attention { border-color: rgba(255,180,90,.5);
     box-shadow: 0 30px 80px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,180,90,.35), 0 0 50px -10px rgba(255,160,70,.55); }
@@ -272,20 +306,34 @@
 
   /* machine-initiated greeting */
   .greet { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
-    background: radial-gradient(60% 50% at 50% 45%, rgba(10,14,28,.6), rgba(7,10,18,.85));
-    backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity .8s var(--spring); }
+    background: radial-gradient(60% 50% at 50% 45%, rgba(10,14,28,.85), rgba(7,10,18,.95));
+    opacity: 0; pointer-events: none; transition: opacity 1s var(--spring); overflow: hidden; }
   .greet.show { opacity: 1; pointer-events: auto; }
-  .greet .card-greet { text-align: center; max-width: 460px; padding: 34px 32px; border-radius: 26px;
-    background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(26px);
-    box-shadow: 0 50px 120px -30px rgba(0,0,0,.9); transform: translateY(16px) scale(.96);
-    transition: transform .8s var(--spring); }
-  .greet.show .card-greet { transform: none; }
-  .greet .orb { width: 56px; height: 56px; margin: 0 auto 18px; border-radius: 50%; --amp: 0;
+  .greet.ambient-on { background: transparent; }
+  .greet .wall { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center;
+    transition: opacity 2s ease; opacity: 0; }
+  .greet .wall.on { opacity: 1; }
+  .greet::after { content: ""; position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity 1.5s ease;
+    background: linear-gradient(180deg, rgba(7,10,18,.35), rgba(7,10,18,.78)); }
+  .greet.ambient-on::after { opacity: 1; }
+  .greet-inner { position: relative; z-index: 2; text-align: center; padding: 30px; max-width: 620px; }
+  .greet-inner.ambient { display: none; }
+  .greet.ambient-on #greetMinimal { display: none; }
+  .greet.ambient-on #greetAmbient { display: block; }
+  .greet .row { display: flex; gap: 12px; justify-content: center; }
+  .greet .orb { width: 50px; height: 50px; margin: 0 auto 20px; border-radius: 50%; --amp: 0;
     background: linear-gradient(135deg, var(--accent-c), var(--accent-a)); transform: scale(calc(1 + var(--amp)*.5));
     box-shadow: 0 0 calc(20px + var(--amp)*40px) rgba(255,126,182,.6); transition: transform .06s linear; }
-  .greet h2 { margin: 0 0 8px; font-size: 23px; font-weight: 680; letter-spacing: -.4px; }
-  .greet p { margin: 0 0 22px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
-  .greet .row { display: flex; gap: 12px; justify-content: center; }
+  .greet .clock { font-size: 60px; font-weight: 200; letter-spacing: -1px; line-height: 1; margin-bottom: 6px;
+    text-shadow: 0 4px 30px rgba(0,0,0,.5); }
+  .greet h2 { margin: 0 0 18px; font-size: 22px; font-weight: 600; opacity: .9; }
+  .greet .quote { margin: 0 auto 30px; max-width: 460px; font-size: 17px; line-height: 1.5; font-style: italic;
+    color: #e7ebff; min-height: 52px; transition: opacity .6s ease; text-shadow: 0 2px 16px rgba(0,0,0,.6); }
+  .greet .big-btn { font-size: 15px; padding: 14px 30px; white-space: nowrap; }
+  .greet .mute { position: absolute; bottom: -60px; left: 50%; transform: translateX(-50%);
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--stroke);
+    background: rgba(255,255,255,.06); color: var(--ink); cursor: pointer; font-size: 15px; }
+  .greet .mute.off { opacity: .4; }
 
   @media (max-width: 1180px) { .rail { display: none; } }
   @media (max-width: 720px) { .card { width: 86vw; } .pulse { width: 84vw; } .cards.has-focus .card:not(.focused){display:none;} }
@@ -310,23 +358,35 @@
     </div>
   </aside>
 
-  <!-- Agents: Active (working) / Resting (snoozed) -->
+  <!-- Agents: Active (working) / Resting (snoozed) / Proactive (background) -->
   <aside class="rail right">
     <h3>Active agents</h3>
     <div class="grp" id="agentsActive"><div class="agents-empty">None running</div></div>
     <h3>Resting</h3>
     <div class="grp" id="agentsResting"><div class="agents-empty">Nothing snoozed</div></div>
+    <h3>Proactive</h3>
+    <div class="grp" id="agentsProactive"></div>
   </aside>
 
   <div class="greet" id="greet">
-    <div class="card-greet">
+    <div class="wall" id="wall"></div>
+    <!-- stage 1: minimal good morning -->
+    <div class="greet-inner" id="greetMinimal">
       <div class="orb" id="greetOrb"></div>
-      <h2 id="greetTitle">Good morning.</h2>
-      <p id="greetBody">I had a look at your day. Want me to get things started?</p>
+      <div class="clock" id="clock"></div>
+      <h2>Good morning</h2>
       <div class="row">
-        <button class="btn primary" id="greetYes">Start my day</button>
+        <button class="btn primary big-btn" id="greetYes">Start my day</button>
         <button class="btn" id="greetNo">Not yet</button>
       </div>
+    </div>
+    <!-- stage 2: ambient (wallpaper + quote + jazz) -->
+    <div class="greet-inner ambient" id="greetAmbient">
+      <div class="clock" id="clock2"></div>
+      <h2>Good morning</h2>
+      <p class="quote" id="quote"></p>
+      <button class="btn primary big-btn" id="greetYes2">Ready to start my day</button>
+      <button class="mute" id="muteBtn" title="Toggle music">♪</button>
     </div>
   </div>
 
@@ -340,8 +400,8 @@
     <div class="horizon">
       <div class="chips" id="chips">
         <div class="chip" data-intent="Start my day">🌅 Start my day (watch it work)</div>
+        <div class="chip" data-intent="Build me a pitch deck">🖼️ Build a pitch deck (Auto-apps)</div>
         <div class="chip" data-intent="Plan a weekend trip to Lisbon">✈️ Plan a weekend in Lisbon</div>
-        <div class="chip" data-intent="Summarize what changed this week">📊 Summarize my week</div>
       </div>
       <div class="intent">
         <span class="spark"></span>
@@ -396,10 +456,22 @@ const scenarios = {
       stream:['Looking across your week…'],
       resolve:{ lines:['Shipped 14 commits, 2 features','Most focused: Tue mornings','Suggest: protect Tue 9–12 next week'], actions:['Apply','Ignore'] } },
   ],
+  deck: [
+    { glyph:'📊', title:'Auto-Excel', agent:'auto-excel', surface:'excel', delay:0,
+      stream:['Pulling Q3 numbers…','Building the revenue chart…'],
+      resolve:{ big:'+38% QoQ', sub:'Revenue model · 4 sheets · 1 chart', actions:['Save','Open'] } },
+    { glyph:'📝', title:'Auto-Docs', agent:'auto-docs', surface:'docs', delay:250,
+      stream:['Drafting the narrative…','Tightening the story…'],
+      resolve:{ big:'1,240 words', sub:'Exec summary · problem · ask', actions:['Save','Open'] } },
+    { glyph:'🖼️', title:'Auto-Slides', agent:'auto-slides', surface:'slides', delay:500, waitsFor:2,
+      stream:['Waiting for numbers & story…'],
+      resolve:{ big:'10 slides', sub:'Pitch deck · ready to combine', actions:['Save deck','Present'] } },
+  ],
 };
 
 function pickScenario(text){
   const t = text.toLowerCase();
+  if (t.includes('deck') || t.includes('pitch') || t.includes('presentation') || t.includes('slides') || t.includes('document') || t.includes('report')) return 'deck';
   if (t.includes('morning') || t.includes('ready')) return 'morning';
   if (t.includes('week') || t.includes('summar')) return 'week';
   return 'lisbon';
@@ -410,6 +482,7 @@ const suzySummaries = {
   lisbon: 'You can be in Lisbon Friday night for <b>$284</b>, staying at a riverside Alfama loft for <b>$96 a night</b>. I drafted a 3-day plan — just say the word and I’ll hold both.',
   morning: 'Good morning. You have <b>3 meetings</b>, a free window <b>12–2pm</b>, and <b>2 emails</b> that actually need you. Everything else I’ve handled.',
   week: 'This week you spent <b>$1,240</b> — mostly travel and groceries — slept <b>6.1h</b> a night, and shipped <b>14 commits</b>. My one suggestion: protect Tuesday mornings.',
+  deck: 'Your numbers, story and slides are ready. Say <b>combine</b> and I’ll merge them into one finished deck.',
 };
 
 let resolvedCount = 0;
@@ -444,7 +517,7 @@ function launch(text){
 
 function buildCard(s){
   const el = document.createElement('div');
-  el.className = 'card' + (s.attention ? ' attention' : '');
+  el.className = 'card' + (s.attention ? ' attention' : '') + (s.surface ? ' surface' : '');
   el.dataset.depth = (Math.random()*1.4 + .6).toFixed(2);
   el.innerHTML = `
     <div class="pill">● Act now</div>
@@ -611,6 +684,7 @@ function runCard(card, s, spec){
   agentActive(s);
   let i = 0;
   card.body.innerHTML = '';
+  if (s.surface) buildSurface(card.body, s.surface);
   const note = document.createElement('div');
   note.className = 'line sub'; card.body.appendChild(note);
   const tick = setInterval(() => {
@@ -621,6 +695,25 @@ function runCard(card, s, spec){
       if (s.waitsFor) waitThenResolve(card, s); else resolve(card, s, spec);
     }
   }, 720);
+}
+
+// live "building" work area per surface type
+function buildSurface(body, type){
+  const work = document.createElement('div');
+  work.className = 'work ' + type;
+  if (type === 'slides'){
+    work.innerHTML = `<div class="film">${Array(6).fill('<div class="sl"></div>').join('')}</div>`;
+    const sls = work.querySelectorAll('.sl');
+    sls.forEach((sl, k) => setTimeout(() => { sl.classList.add('in'); sl.textContent = k+1; }, 350 + k*260));
+  } else if (type === 'docs'){
+    work.innerHTML = `<div class="doc">${Array(5).fill('<div class="ln"></div>').join('')}<span class="caret"></span></div>`;
+    work.querySelectorAll('.ln').forEach((ln, k) => setTimeout(() => ln.style.width = (55+Math.random()*40)+'%', 300 + k*280));
+  } else if (type === 'excel'){
+    work.innerHTML = `<div class="sheet">${Array(16).fill('<i></i>').join('')}</div>`;
+    const cells = work.querySelectorAll('i');
+    cells.forEach((c, k) => setTimeout(() => { c.classList.add('in'); if (k%4===3) c.classList.add('h'); }, 200 + k*70));
+  }
+  body.appendChild(work);
 }
 
 function waitThenResolve(card, s){
@@ -635,7 +728,13 @@ function waitThenResolve(card, s){
 
 function resolve(card, s, spec){
   const r = s.resolve;
-  card.body.innerHTML = '';
+  // keep the built artifact visible for surface cards; clear only the status note
+  if (s.surface){
+    if (!card.body.querySelector('.work')) buildSurface(card.body, s.surface);
+    card.body.querySelectorAll('.line').forEach(n => n.remove());
+  } else {
+    card.body.innerHTML = '';
+  }
   if (r.big){
     addLine(card.body, `<div class="big">${r.big}</div>`, 0);
     addLine(card.body, `<div class="sub">${r.sub}</div>`, 80);
@@ -686,9 +785,10 @@ const actionHints = {
   morning: 'Try: “handle it” — I’ll take care of what needs you',
   lisbon:  'Try: “book it” — I’ll fold the flight into the plan',
   week:    'Try: “apply it” — I’ll protect your focus time',
+  deck:    'Try: “combine” — I’ll merge them into one deck',
 };
 
-// ---- Voice: Gemini TTS (cool "Despina" voice), with graceful fallback ----
+// ---- Voice: Gemini TTS only (Aoede) — no browser-speech fallback ----
 const GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 const GEMINI_VOICE = 'Aoede'; // breezy, characterful
 
@@ -736,7 +836,7 @@ function sfx(type){
 }
 async function speak(text){
   const key = getKey();
-  if (!key) return browserSpeak(text);
+  if (!key) return;                     // Gemini-only; no robotic browser voice
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent?key=${encodeURIComponent(key)}`,
@@ -755,7 +855,7 @@ async function speak(text){
     drive(audio);                       // bubble follows the voice
     await audio.play();
   } catch (e){
-    browserSpeak(text); // fall back to built-in voice
+    console.warn('Gemini TTS failed:', e.message);   // silent — no fallback voice
   }
 }
 
@@ -784,18 +884,6 @@ function drive(audio){
 }
 // which element reacts to the voice — greeting orb while greeting, else the bubble
 function voiceTarget(){ return greet.classList.contains('show') ? greetOrb : suzyFace; }
-
-function browserSpeak(text){
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1.02; u.pitch = 1.05;
-  const v = speechSynthesis.getVoices().find(v => /female|samantha|zira|google us/i.test(v.name));
-  if (v) u.voice = v;
-  u.onstart = () => suzyFace.classList.add('speaking');
-  u.onend = () => suzyFace.classList.remove('speaking');
-  speechSynthesis.speak(u);
-}
 
 function b64ToBytes(b64){
   const bin = atob(b64); const out = new Uint8Array(bin.length);
@@ -904,6 +992,19 @@ function renderPeople(){
 }
 renderPeople();
 
+// ---------- Proactive agents: working in the background on their own ----------
+const proactiveAgents = [
+  { glyph:'🔎', name:'Research', tasks:['researching ABC Corp','reading 12 sources','comparing competitors'] },
+  { glyph:'🌐', name:'Scout',    tasks:['just browsing for you','tracking a price drop','watching that listing'] },
+  { glyph:'🎨', name:'Maker',    tasks:['making something you like','drafting a playlist','sketching ideas'] },
+];
+const proactiveEl = document.getElementById('agentsProactive');
+proactiveEl.innerHTML = proactiveAgents.map((a,i) => `
+  <div class="tile proactive" data-i="${i}">
+    <div class="av">${a.glyph}</div>
+    <div class="who">${a.name}<small>${a.tasks[0]}</small></div>
+  </div>`).join('');
+
 // ---------- Live: swipeable source feed (CNN · Bloomberg · X · Instagram) ----------
 const sources = [
   { cls:'lf-cnn', logo:'C', name:'CNN', when:'now',
@@ -997,21 +1098,123 @@ function wakeAgent(id, spec){
   agentActive(spec);
 }
 
-// ---------- #1  The machine initiates: greeting ----------
+// ---------- ambient jazz (generated, no asset file) ----------
+let jazz = null;
+function startJazz(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (jazz) { jazz.master.gain.cancelScheduledValues(audioCtx.currentTime);
+      jazz.master.gain.linearRampToValueAtTime(0.16, audioCtx.currentTime+1); return; }
+    const master = audioCtx.createGain(); master.gain.value = 0; master.connect(audioCtx.destination);
+    master.gain.linearRampToValueAtTime(0.16, audioCtx.currentTime + 1.5);
+    // soft jazzy ii-V-I-vi voicings (semitone offsets from a root)
+    const root = 220; // A3
+    const chords = [[2,5,9,12],[7,11,14,17],[0,4,7,11],[9,12,16,19]];
+    const reverb = audioCtx.createGain(); reverb.gain.value = .9; reverb.connect(master);
+    let bar = 0;
+    const playChord = () => {
+      const t = audioCtx.currentTime, ch = chords[bar % chords.length];
+      ch.forEach((st, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = 'sine'; o.frequency.value = root * Math.pow(2, st/12);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(.16/ch.length, t + .25 + i*.04);
+        g.gain.exponentialRampToValueAtTime(.0001, t + 3.4);
+        o.connect(g); g.connect(reverb); o.start(t); o.stop(t + 3.6);
+      });
+      // walking bass
+      const b = audioCtx.createOscillator(), bg = audioCtx.createGain();
+      b.type = 'triangle'; b.frequency.value = root/2 * Math.pow(2, ch[0]/12);
+      bg.gain.setValueAtTime(.0001, t); bg.gain.linearRampToValueAtTime(.12, t+.05);
+      bg.gain.exponentialRampToValueAtTime(.0001, t + 1.6);
+      b.connect(bg); bg.connect(master); b.start(t); b.stop(t + 1.7);
+      bar++;
+    };
+    playChord();
+    jazz = { master, timer: setInterval(playChord, 3400) };
+  } catch(e){}
+}
+function fadeJazz(){
+  if (!jazz) return;
+  jazz.master.gain.cancelScheduledValues(audioCtx.currentTime);
+  jazz.master.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.2);
+}
+function toggleJazz(btn){
+  if (!jazz) { startJazz(); btn.classList.remove('off'); return; }
+  if (btn.classList.toggle('off')) jazz.master.gain.linearRampToValueAtTime(0, audioCtx.currentTime+.4);
+  else jazz.master.gain.linearRampToValueAtTime(0.16, audioCtx.currentTime+.4);
+}
+document.getElementById('muteBtn').addEventListener('click', e => { e.stopPropagation(); toggleJazz(e.currentTarget); });
+
+// ---------- #1  The machine initiates: morning screen ----------
 const greet = document.getElementById('greet');
 const greetOrb = document.getElementById('greetOrb');
-function openGreeting(){
-  greet.classList.add('show');
-  // speak after a tiny beat so the orb is visible when the voice starts
-  setTimeout(() => speak("Good morning. I had a look at your day — three meetings, two emails that need you, and a free window at noon. Want me to get things started?"), 500);
+const wall = document.getElementById('wall');
+const clockEl = document.getElementById('clock');
+const quoteEl = document.getElementById('quote');
+
+// gradient "wallpapers" (no external assets) — calm dawn palettes
+const walls = [
+  'linear-gradient(135deg,#1a2a6c,#b21f1f,#fdbb2d)',
+  'linear-gradient(135deg,#0f2027,#203a43,#2c5364)',
+  'linear-gradient(135deg,#42275a,#734b6d)',
+  'linear-gradient(135deg,#136a8a,#267871)',
+  'linear-gradient(160deg,#ff9a9e,#fad0c4,#fbc2eb)',
+];
+const quotes = [
+  '“The secret of getting ahead is getting started.”',
+  '“Well begun is half done.”',
+  '“Today is the first page of a brand new chapter.”',
+  '“Small steps every day add up to big results.”',
+  '“Make today so good that yesterday gets jealous.”',
+];
+let wallI = Math.floor(Math.random()*walls.length);
+function rotateWall(){
+  wall.classList.remove('on');
+  setTimeout(() => {
+    wall.style.background = walls[wallI % walls.length];
+    quoteEl.style.opacity = 0;
+    setTimeout(() => { quoteEl.textContent = quotes[wallI % quotes.length]; quoteEl.style.opacity = 1; }, 300);
+    wall.classList.add('on'); wallI++;
+  }, 200);
 }
-document.getElementById('greetYes').addEventListener('click', () => {
+const clock2 = document.getElementById('clock2');
+function tickClock(){
+  const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  clockEl.textContent = t; clock2.textContent = t;
+}
+let wallTimer, clockTimer, idleTimer;
+function openGreeting(){          // stage 1: minimal
+  greet.classList.add('show');
+  tickClock(); clockTimer = setInterval(tickClock, 10000);
+  idleTimer = setTimeout(() => {   // no action in 5 min → drift to ambient
+    if (greet.classList.contains('show') && !greet.classList.contains('ambient-on')) enterAmbient();
+  }, 5 * 60 * 1000);
+}
+function enterAmbient(){          // stage 2: wallpaper + quote + jazz
+  clearTimeout(idleTimer);
+  greet.classList.add('ambient-on');
+  rotateWall(); clearInterval(wallTimer); wallTimer = setInterval(rotateWall, 7000);
+  startJazz();
+}
+function startDay(){
+  clearTimeout(idleTimer);
+  clearInterval(wallTimer); clearInterval(clockTimer);
+  fadeJazz();
   greet.classList.remove('show');
-  setTimeout(() => launch('morning'), 400);   // OS reports your day, then summarizes
-});
-document.getElementById('greetNo').addEventListener('click', () => greet.classList.remove('show'));
+  setTimeout(() => speak("Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon."), 700);
+  setTimeout(() => launch('morning'), 1100);
+}
+document.getElementById('greetYes').addEventListener('click', startDay);
+document.getElementById('greetYes2').addEventListener('click', startDay);
+document.getElementById('greetNo').addEventListener('click', enterAmbient);
 // greet on first load
-window.addEventListener('load', () => setTimeout(openGreeting, 700));
+window.addEventListener('load', () => setTimeout(openGreeting, 500));
+// browsers block autoplay — start jazz on first interaction once in ambient stage
+const kickJazz = () => { if (greet.classList.contains('ambient-on')) startJazz(); };
+window.addEventListener('pointerdown', kickJazz);
+window.addEventListener('keydown', kickJazz);
 
 // ---------- #3  Conducting: the OS performs VerbUI gestures from your intent ----------
 const hand = document.getElementById('hand');
@@ -1069,11 +1272,36 @@ async function conductAction(){
   suzy.classList.remove('show');
   origin.querySelector('b').textContent = 'performing your request…';
   hand.classList.add('show');
-  const pair = fusePairs[currentKey] || fusePairs.morning;
-  await conductFuse(pair[0], pair[1]).catch(()=>{});
+  if (currentKey === 'deck') {
+    // agents combine: drag the numbers and the story into the slides, producing one deck
+    await conductFuse('Auto-Excel', 'Auto-Slides').catch(()=>{});
+    await wait(500);
+    await conductFuse('Auto-Docs', 'Auto-Slides').catch(()=>{});
+    await wait(400);
+    finishDeck();
+  } else {
+    const pair = fusePairs[currentKey] || fusePairs.morning;
+    await conductFuse(pair[0], pair[1]).catch(()=>{});
+  }
   await wait(700);
   hand.classList.remove('show');
   input.placeholder = 'What do you want to do?';
+}
+
+// the finished, combined artifact persists (pinned), not minimized
+function finishDeck(){
+  const deck = [...document.querySelectorAll('.card')].find(c => c.dataset.title === 'Auto-Slides');
+  if (!deck) return;
+  deck.classList.add('pinned', 'combining', 'child');
+  const body = deck.querySelector('.body');
+  body.innerHTML = '';
+  if (!body.querySelector('.work')) buildSurface(body, 'slides');
+  addLine(body, `<div class="big">Deck ready</div>`, 0);
+  addLine(body, `<div class="sub">10 slides · numbers + story combined</div>`, 80);
+  addLine(body, `<div class="stamp">● saved · v1 · just now</div>`, 160);
+  deck.querySelector('.st').textContent = 'pinned';
+  sfx('ding');
+  speak('Done. I combined your numbers and story into one finished deck — ten slides, ready to present.');
 }
 window.conductAction = conductAction;
 </script>
