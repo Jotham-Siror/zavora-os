@@ -61,7 +61,7 @@
   .origin b { color: var(--ink); font-weight: 600; }
 
   /* ---------- ambient regions: Pulse (top) · People (left) · Agents (right) ---------- */
-  .rail { position: fixed; top: 28px; bottom: 150px; width: 178px; z-index: 3;
+  .rail { position: fixed; top: 60px; bottom: 130px; width: 178px; z-index: 3;
     display: flex; flex-direction: column; gap: 10px; padding: 6px;
     opacity: .92; transition: opacity .4s ease; overflow-y: auto; }
   .rail.left { left: 18px; } .rail.right { right: 18px; }
@@ -279,8 +279,8 @@
   .suzy .text { font-size: 14.5px; line-height: 1.55; color: #e7ebff; }
   .suzy .text b { color: #fff; font-weight: 650; }
 
-  .brand { position: fixed; bottom: 16px; left: 0; right: 0; z-index: 3;
-    display: flex; align-items: center; justify-content: center; gap: 10px; pointer-events: none; }
+  .brand { position: fixed; top: 16px; left: 18px; z-index: 36;
+    display: flex; align-items: center; gap: 10px; pointer-events: none; }
   .brand .logo { flex: none; filter: drop-shadow(0 2px 8px rgba(124,92,255,.4)); }
   .brand .wm { font-size: 13px; letter-spacing: 2.5px; font-weight: 600; color: #cdd5f0; }
   .brand .wm b { font-weight: 800;
@@ -291,8 +291,9 @@
   @media (max-width: 620px) { .brand .tag { display: none; } }
 
   /* early-access CTA + modal */
-  .ea-btn { pointer-events: auto; margin-left: 12px; padding: 7px 14px; border-radius: 999px; border: none; cursor: pointer;
-    font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(120deg, var(--accent-a), #5b7cff);
+  .ea-btn { position: fixed; top: 14px; right: 18px; z-index: 46;
+    pointer-events: auto; padding: 9px 16px; border-radius: 999px; border: none; cursor: pointer;
+    font-size: 12.5px; font-weight: 700; color: #fff; background: linear-gradient(120deg, var(--accent-a), #5b7cff);
     box-shadow: 0 8px 22px -8px var(--accent-a); transition: transform .2s var(--spring); }
   .ea-btn:hover { transform: translateY(-1px) scale(1.03); }
   .ea { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px;
@@ -641,8 +642,8 @@
     </svg>
     <span class="wm">ZAVORA<b>OS</b></span>
     <span class="tag">The OS that works while you live</span>
-    <button class="ea-btn" id="eaOpen">Get early access</button>
   </div>
+  <button class="ea-btn" id="eaOpen">Get early access</button>
 
   <!-- Early access signup modal -->
   <div class="ea" id="eaModal">
@@ -1227,10 +1228,13 @@ document.addEventListener('pointerdown', e => {
   if (e.target.closest('.btn, .chip, .card, .bgcard, .tile, .mic, .go, .mute, .flow-nav, .lf-dots i')) sfx('click');
 }, true);
 let currentVoice = null;   // only one voice clip plays at a time
+function stopVoice(){
+  if (currentVoice) { try { currentVoice.pause(); currentVoice.currentTime = 0; } catch(_){} currentVoice = null; }
+}
 async function speak(arg, onAudio){
   const id = clipFor(arg);
   try {
-    if (currentVoice) { currentVoice.pause(); currentVoice.currentTime = 0; }  // cut off any in-progress clip
+    stopVoice();   // cut off any in-progress clip
     const audio = new Audio(`audio/${id}.wav`);
     currentVoice = audio;
     audio.addEventListener('ended', () => { if (currentVoice === audio) currentVoice = null; });
@@ -1682,6 +1686,7 @@ function enterAmbient(){          // stage 2: wallpaper + quote + jazz
 function startDay(){
   clearTimeout(idleTimer);
   clearInterval(wallTimer); clearInterval(clockTimer);
+  stopVoice();                 // greeting clip stays in the greeting stage only
   fadeJazz();
   greet.classList.remove('show');
   // pick a random use case each start so it never feels like a static page
