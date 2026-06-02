@@ -25,6 +25,9 @@ CLIPS = {
   "deck":     "Your numbers, story and slides are ready. Say combine and I'll merge them into one finished deck.",
   "deck_done":"Done. I combined your numbers and story into one finished deck — ten slides, ready to present.",
   "fuse":     "Done. I've combined those for you.",
+  "people":   "Three people are waiting on you — Alex, Priya and the dev team. I've drafted replies and prepped your 3pm one-on-one.",
+  "live":     "Here's what's happening — rates paused, chips rallying, your portfolio up 0.8 percent, and a keynote is live now.",
+  "proactive":"While you were away I did a few things — researched ABC Corp, caught a 12 percent price drop, and made a couple of things you might like.",
 }
 
 def wav(pcm, rate=24000):
@@ -47,6 +50,8 @@ def gen(text):
 
 out = pathlib.Path("audio"); out.mkdir(exist_ok=True)
 for cid, text in CLIPS.items():
-    (out / f"{cid}.wav").write_bytes(gen(text))
+    f = out / f"{cid}.wav"
+    if f.exists(): print("· skip", cid); continue
+    f.write_bytes(gen(text))
     print("✓", cid)
 print("done")

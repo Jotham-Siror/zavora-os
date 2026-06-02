@@ -674,11 +674,47 @@ const scenarios = {
       stream:['Waiting for numbers & story…'],
       resolve:{ big:'10 slides', sub:'Pitch deck · ready to combine', actions:['Save deck','Present'] } },
   ],
+  people: [
+    { glyph:'💬', title:'Team', agent:'team.agent', delay:0,
+      stream:['Catching up your channels…','Summarizing threads…'],
+      resolve:{ big:'3 need replies', sub:'Alex, Priya & #dev-team waiting', actions:['Draft replies','Open'] } },
+    { glyph:'👤', title:'Priya', agent:'people.agent', delay:250,
+      stream:['Reviewing your 1:1 notes…'],
+      resolve:{ big:'1:1 at 3pm', sub:'2 open items from last week', actions:['Prep notes','Reschedule'] } },
+    { glyph:'🤝', title:'Connections', agent:'crm.agent', delay:500, waitsFor:2, attention:true,
+      stream:['Finding who to reconnect with…'],
+      resolve:{ lines:['Reconnect: Dana (3 mo)','Intro promised to Sam','Birthday: Mara, Friday'], actions:['Send notes','Snooze'] } },
+  ],
+  live: [
+    { glyph:'📰', title:'Headlines', agent:'news.agent', delay:0,
+      stream:['Scanning CNN & Bloomberg…','Filtering to what you follow…'],
+      resolve:{ big:'3 big stories', sub:'Rates paused · chips rally · local rain clears', actions:['Read aloud','Open'] } },
+    { glyph:'📈', title:'Markets', agent:'markets.agent', delay:250,
+      stream:['Checking your watchlist…'],
+      resolve:{ big:'+0.6% pre-open', sub:'NVDA +2.1% · your portfolio +0.8%', actions:['Details','Set alert'] } },
+    { glyph:'🔴', title:'Now', agent:'live.agent', delay:500, waitsFor:2, attention:true,
+      stream:['Tuning into live events…'],
+      resolve:{ lines:['🔴 Keynote live · 4.2k watching','🔴 Local match 1–0, 70’','X: your post hit 1.2k'], actions:['Watch','Dismiss'] } },
+  ],
+  proactive: [
+    { glyph:'🔎', title:'Research', agent:'research.agent', delay:0,
+      stream:['Reading 12 sources on ABC Corp…','Cross-checking claims…'],
+      resolve:{ big:'Brief ready', sub:'ABC Corp · funding, team, risks', actions:['Open','Save'] } },
+    { glyph:'🌐', title:'Scout', agent:'scout.agent', delay:250,
+      stream:['Watching prices for you…'],
+      resolve:{ big:'Price dropped', sub:'That listing fell 12% overnight', actions:['Buy now','Keep watching'] } },
+    { glyph:'🎨', title:'Maker', agent:'maker.agent', delay:500, waitsFor:2, attention:true,
+      stream:['Making something you’d like…'],
+      resolve:{ lines:['Drafted a weekend playlist','Sketched 3 logo ideas','Wrote a trip shortlist'], actions:['Show me','Discard'] } },
+  ],
 };
 
 function pickScenario(text){
   const t = text.toLowerCase();
   if (t.includes('deck') || t.includes('pitch') || t.includes('presentation') || t.includes('slides') || t.includes('document') || t.includes('report')) return 'deck';
+  if (t.includes('people') || t.includes('team') || t.includes('family') || t.includes('catch me up')) return 'people';
+  if (t.includes('live') || t.includes('news') || t.includes('happening') || t.includes('market')) return 'live';
+  if (t.includes('proactive') || t.includes('background') || t.includes('working on') || t.includes('found')) return 'proactive';
   if (t.includes('morning') || t.includes('ready')) return 'morning';
   if (t.includes('week') || t.includes('summar')) return 'week';
   return 'lisbon';
@@ -690,6 +726,9 @@ const suzySummaries = {
   morning: 'Good morning. You have <b>3 meetings</b>, a free window <b>12–2pm</b>, and <b>2 emails</b> that actually need you. Everything else I’ve handled.',
   week: 'This week you spent <b>$1,240</b> — mostly travel and groceries — slept <b>6.1h</b> a night, and shipped <b>14 commits</b>. My one suggestion: protect Tuesday mornings.',
   deck: 'Your numbers, story and slides are ready. Say <b>combine</b> and I’ll merge them into one finished deck.',
+  people: 'Three people are waiting on you — <b>Alex</b>, <b>Priya</b> and <b>#dev-team</b>. I’ve drafted replies and prepped your 3pm one-on-one.',
+  live: 'Here’s what’s happening — rates paused, chips rallying, your portfolio <b>up 0.8%</b>, and a keynote is live now.',
+  proactive: 'While you were away I did a few things — researched <b>ABC Corp</b>, caught a <b>12% price drop</b>, and made a couple of things you might like.',
 };
 
 let resolvedCount = 0;
@@ -1073,12 +1112,14 @@ function showSuzy(){
 }
 
 // ---- Guided suggestion tour: walks through every prompt so all can be tested ----
-const tourOrder = ['morning','lisbon','week','deck'];
+const tourOrder = ['morning','people','live','lisbon','week','deck','proactive'];
 const scenarioPrompt = {
   morning: 'Start my day', lisbon: 'Plan a weekend trip to Lisbon',
   week: 'Summarize what changed this week', deck: 'Build me a pitch deck',
+  people: 'Catch me up on people', live: 'What is happening live', proactive: 'Show me what you found',
 };
-const actionPrompt = { morning:'handle it', lisbon:'book it', week:'apply it', deck:'combine' };
+const actionPrompt = { morning:'handle it', lisbon:'book it', week:'apply it', deck:'combine',
+  people:'reply to them', live:'read aloud', proactive:'show me' };
 
 let pendingSuggestion = null, suggestTimer = null;
 function armSuggestion(text){
@@ -1227,7 +1268,7 @@ function submitIntent(text){
   input.value = '';
   // If cards are already on the field and this reads like an action, the OS performs it (Conducting).
   const hasCards = !!document.querySelector('.card');
-  const isAction = /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care)\b/i.test(text);
+  const isAction = /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care|read aloud|show me|reply to them)\b/i.test(text);
   if (hasCards && isAction) { conductAction(); }
   else { launch(text); }
 }
@@ -1593,7 +1634,9 @@ function startDay(){
   clearInterval(wallTimer); clearInterval(clockTimer);
   fadeJazz();
   greet.classList.remove('show');
-  setTimeout(() => launch('morning'), 700);
+  // pick a random use case each start so it never feels like a static page
+  const start = tourOrder[Math.floor(Math.random() * tourOrder.length)];
+  setTimeout(() => launch(scenarioPrompt[start]), 700);
 }
 document.getElementById('greetYes').addEventListener('click', startDay);
 document.getElementById('greetYes2').addEventListener('click', startDay);
@@ -1659,7 +1702,8 @@ async function conductFuse(sourceTitle, targetTitle){
 
 // Conducting now runs on the SECOND prompt: the user asks for action,
 // and the OS performs VerbUI gestures on the cards already on the field.
-const fusePairs = { morning:['Needs you','Today'], lisbon:['Flights','Itinerary'], week:['Money','Focus'] };
+const fusePairs = { morning:['Needs you','Today'], lisbon:['Flights','Itinerary'], week:['Money','Focus'],
+  people:['Team','Connections'], live:['Headlines','Now'], proactive:['Research','Maker'] };
 async function conductAction(){
   if (!document.querySelector('.card')) return;
   suzy.classList.remove('show');
