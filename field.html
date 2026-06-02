@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Zavora OS — Agents as Operating System</title>
+<title>Zavora OS - The Agentic OS that works while you live</title>
 <style>
   :root {
     --bg0: #070a12;
@@ -462,7 +462,7 @@
   @media (max-width: 640px) {
     .rail, .bgcards, .brand { display: none; }
     :root { --cardw: 100%; }
-    .stage { justify-content: flex-start; padding: 16px 16px 116px; }
+    .stage { justify-content: flex-start; padding: 58px 16px 116px; }
     .field { perspective: none; margin-top: 6px; }
     .cards { flex-direction: column; align-items: center; gap: 12px; }
     /* compact card sizing for phones */
@@ -474,9 +474,12 @@
     .card .head { margin-bottom: 12px; }
     .btn { padding: 9px 12px; font-size: 12.5px; }
     .surface .work { min-height: 96px; }
-    .origin { position: static; transform: none; margin: 0 auto 10px; }
-    .origin.show { transform: none; }
-    .suzy { position: static; transform: none; width: 100%; max-width: 440px; margin: 4px auto 14px; opacity: 1; pointer-events: auto; }
+    .origin { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 50%;
+      transform: translateX(-50%); max-width: calc(100% - 24px); font-size: 12px; padding: 7px 14px; z-index: 45; }
+    .origin.show { transform: translateX(-50%); }
+    .suzy { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+      width: calc(100% - 24px); max-width: 480px; margin: 0; z-index: 38; }
+    .suzy.show { transform: translateX(-50%); }
     .suzy:not(.show) { display: none; }
     .horizon { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%);
       width: calc(100% - 24px); max-width: 560px; margin: 0; z-index: 40; }
@@ -940,7 +943,7 @@ function maybeShowHelp(){
       <div><div class="title">Suzy</div><div class="agent">your assistant</div></div></div>
     <div class="body">
       <div class="line">Suzy can</div>
-      <div class="line" style="margin-top:8px">1. Plan trips, days and budgets</div>
+      <div class="line" style="margin-top:8px">1. Plan your work, days and budgets</div>
       <div class="line">2. Triage your inbox & meetings</div>
       <div class="line">3. Watch what's live and keep you posted</div>
       <div class="line sub" style="margin-top:12px">Ask Suzy for anything.</div>
@@ -1065,19 +1068,36 @@ function showSuzy(){
   suzyText.innerHTML = html;
   suzy.classList.add('show');
   speak(suzyText.textContent);
-  // invite the second, action-oriented prompt (this is what triggers Conducting)
-  setTimeout(() => {
-    input.value = '';
-    input.placeholder = actionHints[currentKey] || 'Tell me what to do…';
-    input.focus();
-  }, 1600);
+  // after the summary, suggest the matching ACTION prompt (triggers Conducting)
+  setTimeout(() => armSuggestion(actionPrompt[currentKey]), 1600);
 }
-const actionHints = {
-  morning: 'Try: “handle it” — I’ll take care of what needs you',
-  lisbon:  'Try: “book it” — I’ll fold the flight into the plan',
-  week:    'Try: “apply it” — I’ll protect your focus time',
-  deck:    'Try: “combine” — I’ll merge them into one deck',
+
+// ---- Guided suggestion tour: walks through every prompt so all can be tested ----
+const tourOrder = ['morning','lisbon','week','deck'];
+const scenarioPrompt = {
+  morning: 'Start my day', lisbon: 'Plan a weekend trip to Lisbon',
+  week: 'Summarize what changed this week', deck: 'Build me a pitch deck',
 };
+const actionPrompt = { morning:'handle it', lisbon:'book it', week:'apply it', deck:'combine' };
+
+let pendingSuggestion = null, suggestTimer = null;
+function armSuggestion(text){
+  if (!text) return;
+  pendingSuggestion = text;
+  input.value = '';
+  input.placeholder = `Try: “${text}”  ·  press ↵`;
+  input.focus();
+  clearTimeout(suggestTimer);
+  suggestTimer = setTimeout(() => {            // 3-min idle → auto-run the suggestion
+    if (pendingSuggestion && !input.value.trim()) submitIntent(pendingSuggestion);
+  }, 180000);
+}
+// after Conducting finishes, suggest the NEXT scenario in the tour
+function suggestNextScenario(){
+  const next = tourOrder[(tourOrder.indexOf(currentKey) + 1) % tourOrder.length];
+  armSuggestion(scenarioPrompt[next]);
+}
+const actionHints = {};   // (replaced by the tour above)
 
 // ---- Voice: prerecorded clips (generated once via gen_audio.py) — no live TTS, no cost ----
 // Map a clip id (or summary text) → audio file in audio/.
@@ -1115,10 +1135,14 @@ function sfx(type){
 document.addEventListener('pointerdown', e => {
   if (e.target.closest('.btn, .chip, .card, .bgcard, .tile, .mic, .go, .mute, .flow-nav, .lf-dots i')) sfx('click');
 }, true);
+let currentVoice = null;   // only one voice clip plays at a time
 async function speak(arg, onAudio){
   const id = clipFor(arg);
   try {
+    if (currentVoice) { currentVoice.pause(); currentVoice.currentTime = 0; }  // cut off any in-progress clip
     const audio = new Audio(`audio/${id}.wav`);
+    currentVoice = audio;
+    audio.addEventListener('ended', () => { if (currentVoice === audio) currentVoice = null; });
     drive(audio);                       // bubble follows the voice
     if (onAudio) onAudio(audio);
     await audio.play();
@@ -1199,6 +1223,8 @@ function addLine(parent, html, delay){
 // orchestration cues route through Conducting (agent performs gestures itself)
 function submitIntent(text){
   if (!text.trim()) return;
+  clearTimeout(suggestTimer); pendingSuggestion = null;
+  input.value = '';
   // If cards are already on the field and this reads like an action, the OS performs it (Conducting).
   const hasCards = !!document.querySelector('.card');
   const isAction = /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care)\b/i.test(text);
@@ -1524,8 +1550,9 @@ function tickClock(){
 }
 const GREETING_LINE = "Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon.";
 const greetCC = document.getElementById('greetCC');
-let greetingPlayed = false;
+let greetingPlayed = false, greetingBusy = false;
 async function playGreeting(){
+  if (greetingBusy) return; greetingBusy = true;
   // build the caption as word spans for synced reveal
   const words = GREETING_LINE.split(' ');
   greetCC.innerHTML = words.map(w => `<span class="w">${w}</span>`).join(' ');
@@ -1542,6 +1569,7 @@ async function playGreeting(){
   });
   if (ok) { greetingPlayed = true; document.getElementById('tapHint')?.classList.add('gone'); }
   else spans.forEach(s => s.classList.add('lit'));   // no audio → just show full text
+  greetingBusy = false;
 }
 let wallTimer, clockTimer, idleTimer;
 function openGreeting(){          // stage 1: minimal (pre-login)
@@ -1651,6 +1679,7 @@ async function conductAction(){
   await wait(700);
   hand.classList.remove('show');
   input.placeholder = 'What do you want to do?';
+  setTimeout(suggestNextScenario, 1400);   // continue the guided tour
 }
 
 // the finished, combined artifact persists (pinned), not minimized
