@@ -290,6 +290,34 @@
     padding-left: 10px; border-left: 1px solid var(--stroke); }
   @media (max-width: 620px) { .brand .tag { display: none; } }
 
+  /* early-access CTA + modal */
+  .ea-btn { pointer-events: auto; margin-left: 12px; padding: 7px 14px; border-radius: 999px; border: none; cursor: pointer;
+    font-size: 12px; font-weight: 700; color: #fff; background: linear-gradient(120deg, var(--accent-a), #5b7cff);
+    box-shadow: 0 8px 22px -8px var(--accent-a); transition: transform .2s var(--spring); }
+  .ea-btn:hover { transform: translateY(-1px) scale(1.03); }
+  .ea { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px;
+    background: rgba(7,10,18,.7); backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity .4s var(--spring); }
+  .ea.show { opacity: 1; pointer-events: auto; }
+  .ea-card { position: relative; width: 100%; max-width: 440px; padding: 32px; border-radius: 24px;
+    background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(28px);
+    box-shadow: 0 50px 120px -30px rgba(0,0,0,.9); transform: translateY(16px) scale(.97); transition: transform .4s var(--spring); }
+  .ea.show .ea-card { transform: none; }
+  .ea-x { position: absolute; top: 14px; right: 16px; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+  .ea-card h2 { margin: 0 0 10px; font-size: 22px; font-weight: 700; }
+  .ea-card p { margin: 0 0 18px; font-size: 14px; line-height: 1.55; color: #cdd5f0; }
+  .ea-card form { display: flex; flex-direction: column; gap: 10px; }
+  .ea-card input { padding: 13px 16px; border-radius: 13px; border: 1px solid var(--stroke);
+    background: rgba(255,255,255,.05); color: var(--ink); font-size: 15px; outline: none; }
+  .ea-card input:focus { border-color: rgba(124,92,255,.55); box-shadow: 0 0 0 3px rgba(124,92,255,.14); }
+  .ea-card .btn.primary { padding: 13px; font-size: 14px; }
+  .ea-fine { margin: 14px 0 0 !important; font-size: 11.5px !important; color: rgba(154,164,196,.6) !important; }
+  .ea-done { display: none; text-align: center; }
+  .ea-done.show { display: block; }
+  .ea-form-hide { display: none !important; }
+  .ea-check { width: 52px; height: 52px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 26px; color: #fff; background: linear-gradient(135deg, var(--accent-b), #16a89b); }
+  .ea-done h3 { margin: 0 0 8px; font-size: 19px; }
+
   /* ---------- VerbUI: gesture states ---------- */
   .card { cursor: grab; }
   .card.grabbed { cursor: grabbing; z-index: 60; transition: none !important;
@@ -613,6 +641,28 @@
     </svg>
     <span class="wm">ZAVORA<b>OS</b></span>
     <span class="tag">The OS that works while you live</span>
+    <button class="ea-btn" id="eaOpen">Get early access</button>
+  </div>
+
+  <!-- Early access signup modal -->
+  <div class="ea" id="eaModal">
+    <div class="ea-card">
+      <button class="ea-x" id="eaClose" aria-label="Close">×</button>
+      <h2>Get early access</h2>
+      <p>Your next computer won't have apps — just say what you want, and agents do it for you.
+         Zavora OS opens to the first members on <b>June 30, 2026</b>.</p>
+      <form id="eaForm">
+        <input id="eaEmail" type="email" required placeholder="you@email.com" autocomplete="email" />
+        <button type="submit" class="btn primary">Reserve my spot →</button>
+      </form>
+      <p class="ea-fine">The first 500 get in on June 30. No spam — one email when your spot opens.</p>
+      <div class="ea-done" id="eaDone">
+        <div class="ea-check">✓</div>
+        <h3>You're on the list.</h3>
+        <p>We'll email you when your spot opens. Want in sooner? Share your link — every friend bumps you up.</p>
+        <button class="btn" id="eaShare">Copy my invite link</button>
+      </div>
+    </div>
   </div>
 
 <script>
@@ -1742,6 +1792,51 @@ function finishDeck(){
   speak('deck_done');
 }
 window.conductAction = conductAction;
+
+// ---------- Early access signup ----------
+const eaModal = document.getElementById('eaModal');
+const eaForm = document.getElementById('eaForm');
+const eaDone = document.getElementById('eaDone');
+// Set this to your form endpoint (Formspree/Getform/etc.) to collect emails for real.
+const SIGNUP_ENDPOINT = 'https://formspree.io/f/xwvzgbee';
+const openEA  = () => eaModal.classList.add('show');
+const closeEA = () => eaModal.classList.remove('show');
+document.getElementById('eaOpen').addEventListener('click', openEA);
+document.getElementById('eaClose').addEventListener('click', closeEA);
+eaModal.addEventListener('click', e => { if (e.target === eaModal) closeEA(); });
+eaForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = document.getElementById('eaEmail').value.trim();
+  if (!email) return;
+  const submitBtn = eaForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true; submitBtn.textContent = 'Reserving…';
+  let ok = true;
+  try {
+    if (SIGNUP_ENDPOINT) {
+      const res = await fetch(SIGNUP_ENDPOINT, {
+        method:'POST', headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
+        body: JSON.stringify({ email }) });
+      ok = res.ok;
+    } else {
+      const list = JSON.parse(localStorage.getItem('zavora_signups') || '[]');
+      list.push({ email, ts: Date.now() }); localStorage.setItem('zavora_signups', JSON.stringify(list));
+    }
+  } catch (_) { ok = false; }
+  if (!ok) {
+    submitBtn.disabled = false; submitBtn.textContent = 'Try again →';
+    return;
+  }
+  eaForm.classList.add('ea-form-hide');
+  document.querySelector('.ea-fine').classList.add('ea-form-hide');
+  eaDone.classList.add('show');
+  sfx('ding');
+});
+document.getElementById('eaShare').addEventListener('click', e => {
+  const url = location.href.split('#')[0] + '#ref';
+  navigator.clipboard?.writeText(url);
+  e.currentTarget.textContent = '✓ Link copied';
+});
+
 </script>
 </body>
 </html>
