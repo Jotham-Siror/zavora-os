@@ -534,6 +534,26 @@
 </style>
 </head>
 <body>
+  <!-- LinkedIn Insight Tag -->
+  <script type="text/javascript">
+  _linkedin_partner_id = "10281097";
+  window._linkedin_data_partner_ids = window._linkedin_data_partner_ids || [];
+  window._linkedin_data_partner_ids.push(_linkedin_partner_id);
+  </script>
+  <script type="text/javascript">
+  (function(l) {
+  if (!l){window.lintrk = function(a,b){window.lintrk.q.push([a,b])};
+  window.lintrk.q=[]}
+  var s = document.getElementsByTagName("script")[0];
+  var b = document.createElement("script");
+  b.type = "text/javascript";b.async = true;
+  b.src = "https://snap.licdn.com/li.lms-analytics/insight.min.js";
+  s.parentNode.insertBefore(b, s);})(window.lintrk);
+  </script>
+  <noscript>
+  <img height="1" width="1" style="display:none;" alt="" src="https://px.ads.linkedin.com/collect/?pid=10281097&fmt=gif" />
+  </noscript>
+
   <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
   <div class="grain"></div>
 
@@ -1804,6 +1824,14 @@ const eaForm = document.getElementById('eaForm');
 const eaDone = document.getElementById('eaDone');
 // Set this to your form endpoint (Formspree/Getform/etc.) to collect emails for real.
 const SIGNUP_ENDPOINT = 'https://formspree.io/f/xwvzgbee';
+const LINKEDIN_CONVERSION_ID = 0;   // ← paste your Conversion ID from LinkedIn Campaign Manager
+// capture campaign params so signups are attributable (e.g. ?utm_source=linkedin)
+const utm = (() => {
+  const p = new URLSearchParams(location.search), o = {};
+  ['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].forEach(k => { if (p.get(k)) o[k] = p.get(k); });
+  o.referrer = document.referrer || '';
+  return o;
+})();
 const openEA  = () => eaModal.classList.add('show');
 const closeEA = () => eaModal.classList.remove('show');
 document.getElementById('eaOpen').addEventListener('click', openEA);
@@ -1820,7 +1848,7 @@ eaForm.addEventListener('submit', async e => {
     if (SIGNUP_ENDPOINT) {
       const res = await fetch(SIGNUP_ENDPOINT, {
         method:'POST', headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
-        body: JSON.stringify({ email }) });
+        body: JSON.stringify({ email, ...utm }) });
       ok = res.ok;
     } else {
       const list = JSON.parse(localStorage.getItem('zavora_signups') || '[]');
@@ -1835,6 +1863,8 @@ eaForm.addEventListener('submit', async e => {
   document.querySelector('.ea-fine').classList.add('ea-form-hide');
   eaDone.classList.add('show');
   sfx('ding');
+  // LinkedIn conversion (replace 0 with your Conversion ID from Campaign Manager)
+  try { window.lintrk && window.lintrk('track', { conversion_id: LINKEDIN_CONVERSION_ID }); } catch(_){}
 });
 document.getElementById('eaShare').addEventListener('click', e => {
   const url = location.href.split('#')[0] + '#ref';
