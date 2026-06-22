@@ -47,7 +47,7 @@ pub fn pick_scenario(text: &str) -> &'static str {
     "lisbon"
 }
 
-fn suzy_summary(key: &str) -> &'static str {
+pub fn suzy_summary(key: &str) -> &'static str {
     match key {
         "lisbon" => "You can be in Lisbon Friday night for <b>$284</b>, staying at a riverside Alfama loft for <b>$96 a night</b>. I drafted a 3-day plan — just say the word and I’ll hold both.",
         "morning" => "Good morning. You have <b>3 meetings</b>, a free window <b>12–2pm</b>, and <b>2 emails</b> that actually need you. Everything else I’ve handled.",

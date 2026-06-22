@@ -11,8 +11,8 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 | Milestone | Branch | Status | Tag |
 |-----------|--------|--------|-----|
-| M0 Live shell | `milestone/M0-live-shell` | 🟡 In progress | `v0.0.1-m0` |
-| M1 Real deck | `milestone/M1-deck` | ⬜ | `v0.1.0-m1` |
+| M0 Live shell | `milestone/M0-live-shell` | ✅ done | `v0.0.1-m0` |
+| M1 Real deck | `milestone/M1-deck` | 🟡 In progress | `v0.1.0-m1` |
 | M2 Combine | `milestone/M2-combine` | ⬜ | `v0.2.0-m2` |
 | M3 Morning | `milestone/M3-morning` | ⬜ | `v0.3.0-m3` |
 | M4 Persistence | `milestone/M4-persistence` | ⬜ | `v0.4.0-m4` |
@@ -82,18 +82,18 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Tasks
 
-- [ ] **M1-T1** `src/tools/mcp.rs` — spawn 3 MCP children at boot; health check
-- [ ] **M1-T2** Env vars: `MCP_WORKSHEET_PATH`, `MCP_DOCX_PATH`, `MCP_SLIDES_PATH`
-- [ ] **M1-T3** `excel_agent` — worksheet-mcp toolset + system prompt
-- [ ] **M1-T4** `docs_agent` — docx-mcp toolset + system prompt
-- [ ] **M1-T5** `slides_agent` — slides-mcp-server toolset; reads sibling artifact paths from session state
-- [ ] **M1-T6** `DeckWorkflow` — `ParallelAgent[excel, docs]` → `SequentialAgent[slides]`
-- [ ] **M1-T7** Wire `adk-runner` → SSE (`card_status`, `card_resolve`, `card_surface`)
-- [ ] **M1-T8** Artifact dir `artifacts/{session_id}/`; `GET /artifacts/{path}`
-- [ ] **M1-T9** Slides filmstrip — `card_surface` events from `add_slide` / `describe_presentation`
-- [ ] **M1-T10** Tool allowlist per sub-agent (BK-005)
-- [ ] **M1-T11** Update `business.toml` — `list_artifacts`, deck capabilities
-- [ ] **M1-T12** Integration test: deck intent → three files exist (BK-004)
+- [x] **M1-T1** `src/tools/mcp.rs` — spawn 3 MCP children at boot; health check
+- [x] **M1-T2** Env vars: `MCP_WORKSHEET_PATH`, `MCP_DOCX_PATH`, `MCP_SLIDES_PATH`
+- [x] **M1-T3** `excel_agent` — worksheet-mcp toolset + system prompt
+- [x] **M1-T4** `docs_agent` — docx-mcp toolset + system prompt
+- [x] **M1-T5** `slides_agent` — slides-mcp-server toolset; reads sibling artifact paths from session state
+- [x] **M1-T6** `DeckWorkflow` — `ParallelAgent[excel, docs]` → `SequentialAgent[slides]`
+- [x] **M1-T7** Wire `adk-runner` → SSE (`card_status`, `card_resolve`, `card_surface`)
+- [x] **M1-T8** Artifact dir `artifacts/{session_id}/`; `GET /artifacts/{path}`
+- [x] **M1-T9** Slides filmstrip — `card_surface` events from `add_slide` / `describe_presentation`
+- [x] **M1-T10** Tool allowlist per sub-agent (BK-005)
+- [x] **M1-T11** Update `business.toml` — `list_artifacts`, deck capabilities
+- [x] **M1-T12** Integration test: deck intent → three files exist (BK-004)
 
 ### Validation
 
@@ -105,9 +105,9 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Commits
 
-- [ ] `feat(mcp): spawn worksheet, docx, and slides servers`
-- [ ] `feat(agents): deck workflow with slides_agent`
-- [ ] `feat(ui): auto-surface preview from SSE`
+- [x] `feat(mcp): spawn worksheet, docx, and slides servers`
+- [x] `feat(agents): deck workflow with slides_agent`
+- [x] `feat(ui): auto-surface preview from SSE`
 
 ---
 

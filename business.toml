@@ -29,6 +29,20 @@ endpoint = "/api/sessions"
 method = "POST"
 access_level = "anonymous"
 
+[[capabilities]]
+name = "list_artifacts"
+description = "Download session artifacts (.xlsx, .docx, .pptx)"
+endpoint = "/artifacts/{session_id}/{filename}"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "build_deck"
+description = "Build a pitch deck via parallel excel+docs then slides MCP agents"
+endpoint = "/api/sessions/{session_id}/intent"
+method = "POST"
+access_level = "anonymous"
+
 [[policies]]
 name = "privacy"
 description = "Sessions are in-memory only until persistence ships (M4). No tracking beyond the session."

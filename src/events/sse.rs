@@ -22,6 +22,15 @@ pub enum FieldEvent {
         index: usize,
         resolve: serde_json::Value,
     },
+    CardSurface {
+        index: usize,
+        surface: String,
+        slide: u32,
+        total: u32,
+    },
+    Error {
+        message: String,
+    },
     SuzySummary {
         key: String,
         html: String,

@@ -80,13 +80,44 @@
       case 'card_status':
         updateStatus(ev.index, ev.status, ev.line);
         break;
+      case 'card_surface': {
+        const entry = cards.get(ev.index);
+        if (!entry || ev.surface !== 'slides') break;
+        const work = entry.card.body.querySelector('.work.slides');
+        if (!work) break;
+        const film = work.querySelector('.film');
+        if (!film) break;
+        const sls = film.querySelectorAll('.sl');
+        const idx = Math.max(0, (ev.slide || 1) - 1);
+        if (sls[idx]) {
+          sls[idx].classList.add('in');
+          sls[idx].textContent = String(ev.slide);
+        }
+        break;
+      }
       case 'card_resolve': {
         const entry = cards.get(ev.index);
         if (!entry) break;
         const merged = Object.assign({}, entry.spec, { resolve: ev.resolve });
         ui.resolve(entry.card, merged, null);
+        if (ev.resolve?.artifact_url) {
+          const openBtn = entry.card.el.querySelector('.btn.primary');
+          if (openBtn) {
+            openBtn.addEventListener(
+              'click',
+              (e) => {
+                e.stopPropagation();
+                window.open(ev.resolve.artifact_url, '_blank');
+              },
+              { once: true }
+            );
+          }
+        }
         break;
       }
+      case 'error':
+        console.warn('[zavora] orchestration error', ev.message);
+        break;
       case 'suzy_summary':
         ui.showSuzyCustom(ev.html);
         break;

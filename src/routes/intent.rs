@@ -8,6 +8,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::events::mock;
+use crate::orchestrator::deck;
 use crate::state::{AppState, SessionStore};
 
 #[derive(Deserialize)]
@@ -24,8 +25,23 @@ pub async fn submit_intent(
         return (StatusCode::BAD_REQUEST, "intent text required").into_response();
     }
 
-    if state.sessions.get(&session_id).await.is_none() {
+    let Some(record) = state.sessions.get(&session_id).await else {
         return (StatusCode::NOT_FOUND, "session not found").into_response();
+    };
+
+    let scenario = mock::pick_scenario(&body.text);
+
+    if scenario == "deck" && state.deck_enabled {
+        if let Some(runner) = state.runner.clone() {
+            return Sse::new(deck::stream_deck(
+                runner,
+                record.user_id,
+                session_id,
+                body.text,
+                state.artifact_dir.clone(),
+            ))
+            .into_response();
+        }
     }
 
     Sse::new(mock::stream_intent(&body.text)).into_response()

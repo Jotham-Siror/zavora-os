@@ -1,7 +1,8 @@
-mod config;
-mod events;
-mod routes;
-mod state;
+use spatial_os::agents::deck::{self, McpPool};
+use spatial_os::config::AppConfig;
+use spatial_os::routes;
+use spatial_os::state::AppState;
+use spatial_os::tools;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -11,14 +12,13 @@ use adk_awp::{
     DefaultTrustAssigner, HealthStateMachine, InMemoryConsentService,
     InMemoryEventSubscriptionService, InMemoryRateLimiter,
 };
+use adk_runner::Runner;
+use adk_session::InMemorySessionService;
 use axum::middleware::from_fn;
 use axum::routing::{delete, get, post};
 use axum::{Extension, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
-
-use config::AppConfig;
-use state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,7 +30,33 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env()?;
-    let app_state = AppState::new();
+    tokio::fs::create_dir_all(&config.artifact_dir).await?;
+
+    let session_service = Arc::new(InMemorySessionService::new());
+
+    let (runner, mcp_pool, deck_enabled) = if config.deck_enabled() {
+        match boot_deck_stack(&config, session_service.clone()).await {
+            Ok((runner, pool)) => {
+                tracing::info!("Deck workflow enabled (MCP + Gemini)");
+                (Some(runner), Some(pool), true)
+            }
+            Err(e) => {
+                tracing::warn!("Deck workflow unavailable ({e:#}) — mock scenarios only");
+                (None, None, false)
+            }
+        }
+    } else {
+        tracing::warn!("GOOGLE_API_KEY not set — deck uses mock SSE");
+        (None, None, false)
+    };
+
+    let app_state = AppState::new(
+        config.artifact_dir.clone(),
+        deck_enabled,
+        runner,
+        session_service,
+        mcp_pool,
+    );
     let session_store = app_state.sessions.clone();
 
     let loader = BusinessContextLoader::from_file(&config.business_toml)?;
@@ -60,6 +86,10 @@ async fn main() -> anyhow::Result<()> {
 
     let mut app = api.layer(Extension(session_store));
 
+    if Path::new(&config.artifact_dir).exists() {
+        app = app.nest_service("/artifacts", ServeDir::new(&config.artifact_dir));
+    }
+
     if Path::new(&config.audio_dir).exists() {
         app = app.nest_service("/audio", ServeDir::new(&config.audio_dir));
     }
@@ -84,7 +114,43 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// AWP routes with Zavora-specific `/awp/a2a` → intent session bootstrap.
+async fn boot_deck_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<McpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("deck_enabled implies API key");
+
+    let worksheet = tools::mcp::spawn_mcp_server(&config.mcp_worksheet_path).await?;
+    let docx = tools::mcp::spawn_mcp_server(&config.mcp_docx_path).await?;
+    let slides = tools::mcp::spawn_mcp_server(&config.mcp_slides_path).await?;
+
+    let w = tools::mcp::health_check(&worksheet).await?;
+    let d = tools::mcp::health_check(&docx).await?;
+    let s = tools::mcp::health_check(&slides).await?;
+    tracing::info!("MCP tools ready: worksheet={w}, docx={d}, slides={s}");
+
+    let pool = Arc::new(McpPool {
+        worksheet: Arc::new(worksheet),
+        docx: Arc::new(docx),
+        slides: Arc::new(slides),
+    });
+
+    let workflow = deck::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+
+    Ok((runner, pool))
+}
+
 fn awp_router(state: AwpState) -> Router {
     Router::new()
         .route("/.well-known/awp.json", get(handlers::discovery))

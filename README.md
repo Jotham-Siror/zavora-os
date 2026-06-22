@@ -23,12 +23,25 @@ Open [http://localhost:8080](http://localhost:8080). Use `?demo=1` for offline s
 | `demo/` | Generated demo assets (gitignored) |
 | `deploy/` | Deployment configs (M11) |
 
-## API (M0)
+## API
 
 - `POST /api/sessions` → `{ session_id, user_id }`
 - `POST /api/sessions/{id}/intent` → SSE stream (`scenario`, `card_*`, `suzy_summary`, `done`)
+- `GET /artifacts/{session_id}/{file}` — deck artifacts (.xlsx, .docx, .pptx)
 - `GET /health`
 - `GET /.well-known/awp.json`, `GET /awp/manifest` — AWP discovery
+
+## Real deck workflow (M1)
+
+Set `GOOGLE_API_KEY` in `.env` and build MCP servers:
+
+```bash
+(cd ../mcp-servers/worksheet-mcp && cargo build --release)
+(cd ../mcp-servers/docx-mcp && cargo build --release)
+(cd ../mcp-servers/mcp_slides && cargo build --release)
+```
+
+Without the API key, deck intents use mock SSE (M0 behavior).
 
 ## Docs
 
