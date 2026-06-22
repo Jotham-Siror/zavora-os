@@ -37,7 +37,9 @@ urlencoding = "2"
 
 [dev-dependencies]
 adk-core = { path = "../adk-rust/adk-core" }
+adk-session = { path = "../adk-rust/adk-session" }
 futures = "0.3"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 dotenvy = "0.15"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }

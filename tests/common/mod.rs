@@ -58,3 +58,19 @@ pub fn gemini_model() -> String {
     load_env();
     std::env::var("GEMINI_MODEL").unwrap_or_else(|_| "gemini-3.1-flash-lite".into())
 }
+
+/// `DATABASE_URL` from `.env` — required for M9 postgres validation tests.
+pub fn database_url() -> String {
+    load_env();
+    std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        panic!(
+            "DATABASE_URL must be set — start Postgres with: docker compose up -d"
+        )
+    })
+}
+
+pub async fn postgres_pool() -> sqlx::PgPool {
+    spatial_os::db::connect(&database_url())
+        .await
+        .expect("postgres connect failed — is spatial-os-postgres running on 5434?")
+}

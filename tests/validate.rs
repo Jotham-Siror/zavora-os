@@ -317,6 +317,135 @@ async fn session_store_create_for_user() {
 }
 
 #[tokio::test]
+async fn postgres_schema_has_m9_tables() {
+    let pool = common::postgres_pool().await;
+
+    let tables: Vec<(String,)> = sqlx::query_as(
+        "SELECT tablename::text FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("list tables");
+
+    let names: Vec<&str> = tables.iter().map(|(t,)| t.as_str()).collect();
+    for expected in [
+        "_sqlx_migrations",
+        "agent_events",
+        "agent_sessions",
+        "ui_sessions",
+        "users",
+    ] {
+        assert!(names.contains(&expected), "missing table {expected}, got {names:?}");
+    }
+
+    let migrations: Vec<(i64, String)> =
+        sqlx::query_as("SELECT version, description FROM _sqlx_migrations ORDER BY version")
+            .fetch_all(&pool)
+            .await
+            .expect("migrations");
+    assert!(
+        migrations.len() >= 3,
+        "expected at least 3 migrations, got {migrations:?}"
+    );
+}
+
+#[tokio::test]
+async fn ui_session_persists_across_store_instances() {
+    use spatial_os::state::{AgentRecord, SessionStore};
+
+    let pool = common::postgres_pool().await;
+    let store_a = SessionStore::with_postgres(pool.clone());
+    assert!(store_a.postgres_enabled());
+
+    let record = store_a.create_for_user("user-validate".into()).await;
+    store_a
+        .set_scenario(&record.session_id, "deck", Some("Build me a pitch deck"))
+        .await;
+    store_a
+        .agent_active(
+            &record.session_id,
+            AgentRecord {
+                id: "deck.agent".into(),
+                title: "Deck".into(),
+                glyph: "📊".into(),
+                agent: "deck.agent".into(),
+                rail: "active".into(),
+            },
+        )
+        .await;
+    store_a
+        .upsert_card(
+            &record.session_id,
+            0,
+            serde_json::json!({"title": "Excel", "glyph": "📗"}),
+            "resolved",
+            Some(serde_json::json!({"big": "Done"})),
+            false,
+        )
+        .await;
+
+    let store_b = SessionStore::with_postgres(pool.clone());
+    let loaded = store_b
+        .get(&record.session_id)
+        .await
+        .expect("session should load from postgres via fresh store");
+    assert_eq!(loaded.user_id, "user-validate");
+    assert_eq!(loaded.scenario.as_deref(), Some("deck"));
+    assert_eq!(loaded.origin_text.as_deref(), Some("Build me a pitch deck"));
+    assert_eq!(loaded.agents_active.len(), 1);
+    assert_eq!(loaded.agents_active[0].id, "deck.agent");
+    assert_eq!(loaded.cards.len(), 1);
+    assert_eq!(
+        loaded.cards[0].card.get("title").and_then(|v| v.as_str()),
+        Some("Excel")
+    );
+
+    let row: (String, serde_json::Value) = sqlx::query_as(
+        "SELECT user_id, cards FROM ui_sessions WHERE session_id = $1",
+    )
+    .bind(&record.session_id)
+    .fetch_one(&pool)
+    .await
+    .expect("ui_sessions row");
+    assert_eq!(row.0, "user-validate");
+    assert!(row.1.is_array());
+}
+
+#[tokio::test]
+async fn pg_agent_session_roundtrip() {
+    use adk_session::{CreateRequest, GetRequest, SessionService};
+    use spatial_os::pg_session::PgSessionService;
+
+    let pool = common::postgres_pool().await;
+    let svc = PgSessionService::new(pool);
+
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let user_id = uuid::Uuid::new_v4().to_string();
+
+    svc.create(CreateRequest {
+        app_name: "zavora-os-validate".into(),
+        user_id: user_id.clone(),
+        session_id: Some(session_id.clone()),
+        state: Default::default(),
+    })
+    .await
+    .expect("create agent session");
+
+    let loaded = svc
+        .get(GetRequest {
+            app_name: "zavora-os-validate".into(),
+            user_id,
+            session_id,
+            num_recent_events: None,
+            after: None,
+        })
+        .await
+        .expect("get agent session");
+
+    assert_eq!(loaded.app_name(), "zavora-os-validate");
+}
+
+#[tokio::test]
 async fn people_rail_unavailable_without_slack() {
     let rail = spatial_os::rails::people::fetch(None).await;
     assert_eq!(rail.source, "unavailable");
