@@ -718,9 +718,11 @@ async function hydrateAuthPill() {
   const pill = document.getElementById('authPill');
   if (!pill) return;
   try {
-    const res = await fetch('/api/auth/me', { credentials: 'include' });
-    if (res.status === 404 || res.status === 501) return;
+    const providersRes = await fetch('/api/auth/providers', { credentials: 'include' });
+    if (!providersRes.ok) return;
+    const providers = await providersRes.json();
     pill.removeAttribute('hidden');
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
     if (res.ok) {
       const user = await res.json();
       const label = user.name || user.email || 'Signed in';
@@ -729,9 +731,25 @@ async function hydrateAuthPill() {
         await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
         location.reload();
       });
-    } else {
-      pill.innerHTML = '<a href="/api/auth/google">Sign in with Google</a>';
+      return;
     }
+    const parts = [];
+    if (providers.google) {
+      parts.push('<a href="/api/auth/google">Sign in with Google</a>');
+    }
+    if (providers.dev) {
+      parts.push('<button type="button" id="authDev">Dev sign in</button>');
+    }
+    pill.innerHTML = parts.join(' ');
+    document.getElementById('authDev')?.addEventListener('click', async () => {
+      await fetch('/api/auth/dev', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      location.reload();
+    });
   } catch (_) { /* auth not configured */ }
 }
 hydrateAuthPill();

@@ -274,6 +274,8 @@ async fn main() -> anyhow::Result<()> {
                 Router::new()
                     .route("/api/auth/google", get(auth::google_redirect))
                     .route("/api/auth/google/callback", get(auth::google_callback))
+                    .route("/api/auth/providers", get(auth::providers))
+                    .route("/api/auth/dev", post(auth::dev_login))
                     .route("/api/auth/me", get(auth::me))
                     .route("/api/auth/logout", post(auth::logout))
                     .with_state(auth),

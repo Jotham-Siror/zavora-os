@@ -234,6 +234,70 @@ pub async fn logout() -> impl IntoResponse {
 }
 
 #[derive(Serialize)]
+pub struct AuthProviders {
+    pub google: bool,
+    pub dev: bool,
+}
+
+pub async fn providers(State(state): State<Arc<AuthState>>) -> Json<AuthProviders> {
+    let google = state.google_client_id.is_some() && state.google_client_secret.is_some();
+    Json(AuthProviders {
+        google,
+        dev: !google,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct DevLoginRequest {
+    pub email: Option<String>,
+}
+
+/// Local-only sign-in when Google OAuth is not configured (M9 dev validation).
+pub async fn dev_login(
+    State(state): State<Arc<AuthState>>,
+    Json(body): Json<DevLoginRequest>,
+) -> impl IntoResponse {
+    if state.google_client_id.is_some() {
+        return err(
+            StatusCode::NOT_FOUND,
+            "Dev login disabled when Google OAuth is configured",
+        )
+        .into_response();
+    }
+
+    let email = body
+        .email
+        .filter(|e| !e.trim().is_empty())
+        .unwrap_or_else(|| "dev@localhost".into());
+
+    let user = match db::find_user_by_email(&state.db, &email).await.ok().flatten() {
+        Some(u) => u,
+        None => match db::create_user(
+            &state.db,
+            &email,
+            Some("Dev User"),
+            "dev",
+            Some(&email),
+            None,
+        )
+        .await
+        {
+            Ok(u) => u,
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()).into_response(),
+        },
+    };
+
+    let jwt = match create_token(user.id, &state.jwt_secret) {
+        Ok(t) => t,
+        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()).into_response(),
+    };
+
+    let mut headers = set_session_cookie(&jwt);
+    headers.insert(axum::http::header::CONTENT_TYPE, "application/json".parse().unwrap());
+    (headers, Json(user)).into_response()
+}
+
+#[derive(Serialize)]
 pub struct AuthStatus {
     pub authenticated: bool,
     pub user: Option<User>,

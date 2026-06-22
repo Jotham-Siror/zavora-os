@@ -315,6 +315,34 @@ fn awp_gate_fixture() -> spatial_os::awp_gate::AwpGate {
     spatial_os::awp_gate::AwpGate::new(Some("validate-jwt-secret".into()), loader.context_ref())
 }
 
+#[tokio::test]
+async fn dev_auth_jwt_unlocks_known_awp_capabilities() {
+    common::load_env();
+    let Ok(jwt_secret) = std::env::var("JWT_SECRET") else {
+        return;
+    };
+    if std::env::var("DATABASE_URL").is_err() {
+        return;
+    }
+
+    let pool = common::postgres_pool().await;
+    let email = format!("dev-validate-{}@localhost", uuid::Uuid::new_v4());
+    let user = spatial_os::db::create_user(&pool, &email, Some("Dev"), "dev", Some(&email), None)
+        .await
+        .expect("dev user");
+    let token = spatial_os::auth::create_token(user.id, &jwt_secret).expect("jwt");
+
+    let gate = awp_gate_fixture();
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert(
+        axum::http::header::AUTHORIZATION,
+        format!("Bearer {token}").parse().unwrap(),
+    );
+    gate.check(&headers, "action:sess-1", "submit_action")
+        .await
+        .expect("dev JWT should satisfy known capability");
+}
+
 #[test]
 fn mcp_allowlist_catalog_covers_deck_agents() {
     let path = common::manifest_dir().join("mcp_allowlists.toml");
