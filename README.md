@@ -43,6 +43,18 @@ Set `GOOGLE_API_KEY` in `.env` and build MCP servers:
 
 Without the API key, deck intents use mock SSE (M0 behavior).
 
+## Validate
+
+```bash
+cargo test --test validate
+```
+
+Runs MCP boot, `gemini-3.1-flash-lite` smoke, agent wiring, and mock SSE checks. Full deck E2E (slow):
+
+```bash
+cargo test --test validate deck_workflow_writes_three_artifacts -- --ignored
+```
+
 ## Docs
 
 - [Specification](docs/SPECIFICATION.md)

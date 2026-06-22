@@ -188,3 +188,32 @@ pub fn stream_intent(text: &str) -> ReceiverStream<Result<axum::response::sse::E
 
     ReceiverStream::new(rx)
 }
+
+/// Returns the first `limit` mock intent event type names (fast, no full simulation wait).
+pub async fn preview_intent_event_types(text: &str, limit: usize) -> Vec<String> {
+    let key = pick_scenario(text);
+    let cards: Vec<serde_json::Value> =
+        serde_json::from_str(scenario_cards(key)).unwrap_or_default();
+
+    let mut types = vec!["scenario".to_string()];
+    for _ in cards.iter().take(limit.saturating_sub(1)) {
+        types.push("card_spawn".to_string());
+    }
+    types.truncate(limit);
+    types
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::StreamExt;
+
+    #[tokio::test]
+    async fn deck_stream_emits_first_event() {
+        let mut stream = stream_intent("Build me a pitch deck");
+        assert!(
+            stream.next().await.is_some(),
+            "mock stream should emit at least one SSE event"
+        );
+    }
+}

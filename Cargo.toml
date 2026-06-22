@@ -31,6 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+adk-core = { path = "../adk-rust/adk-core" }
 futures = "0.3"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
