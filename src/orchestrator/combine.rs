@@ -9,6 +9,7 @@ use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::artifacts;
 use crate::events::sse::{to_event, ConductStep, FieldEvent};
 use crate::orchestrator::{coordinator, persist};
 use crate::state::{SessionArtifacts, SessionStore};
@@ -40,12 +41,6 @@ fn deck_conduct_steps() -> Vec<ConductStep> {
             delay_ms: Some(400),
         },
     ]
-}
-
-fn artifact_url(session_id: &str, path: &Path, artifact_root: &Path) -> Option<String> {
-    let rel = path.strip_prefix(artifact_root).ok()?;
-    let rel = rel.to_str()?;
-    Some(format!("/artifacts/{session_id}/{rel}"))
 }
 
 fn parse_saved_path(response: &serde_json::Value) -> Option<PathBuf> {
@@ -138,7 +133,7 @@ pub fn stream_combine(
     let (tx, rx) = mpsc::channel(64);
 
     tokio::spawn(async move {
-        let session_dir = artifact_root.join(&session_id);
+        let session_dir = artifacts::session_dir(&artifact_root, &user_id, &session_id);
 
         let _ = tx
             .send(Ok(to_event(&FieldEvent::Conduct {
@@ -271,7 +266,7 @@ pub fn stream_combine(
         let sub = format!("{slide_count} slides · numbers + story combined");
         let url = combined_path
             .as_ref()
-            .and_then(|p| artifact_url(&session_id, p, &artifact_root));
+            .and_then(|p| artifacts::public_url(&user_id, &session_id, p, &artifact_root));
 
         let deck_finish = FieldEvent::DeckFinish {
             big: "Deck ready".into(),

@@ -32,7 +32,7 @@ access_level = "anonymous"
 [[capabilities]]
 name = "list_artifacts"
 description = "Download session artifacts (.xlsx, .docx, .pptx)"
-endpoint = "/artifacts/{session_id}/{filename}"
+endpoint = "/artifacts/{user_id}/{session_id}/{filename}"
 method = "GET"
 access_level = "anonymous"
 

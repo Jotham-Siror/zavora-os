@@ -9,6 +9,7 @@ use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::artifacts;
 use crate::events::sse::{to_event, FieldEvent};
 use crate::orchestrator::{coordinator, persist};
 use crate::state::{SessionArtifacts, SessionStore};
@@ -66,12 +67,6 @@ fn artifact_label(path: &Path) -> (String, String) {
         "pptx" => ("10 slides".into(), format!("Pitch deck · {name}")),
         _ => ("Ready".into(), name.into()),
     }
-}
-
-fn artifact_url(session_id: &str, path: &Path, artifact_root: &Path) -> Option<String> {
-    let rel = path.strip_prefix(artifact_root).ok()?;
-    let rel = rel.to_str()?;
-    Some(format!("/artifacts/{session_id}/{rel}"))
 }
 
 fn parse_saved_path(response: &serde_json::Value, _artifact_dir: &Path) -> Option<PathBuf> {
@@ -142,7 +137,7 @@ pub fn stream_deck(
     let (tx, rx) = mpsc::channel(128);
 
     tokio::spawn(async move {
-        let session_dir = artifact_root.join(&session_id);
+        let session_dir = artifacts::session_dir(&artifact_root, &user_id, &session_id);
         if tokio::fs::create_dir_all(&session_dir).await.is_err() {
             return;
         }
@@ -278,7 +273,12 @@ pub fn stream_deck(
 
                                 if let Some(path) = path {
                                     let (big, sub) = artifact_label(&path);
-                                    let url = artifact_url(&session_id, &path, &artifact_root);
+                                    let url = artifacts::public_url(
+                                        &user_id,
+                                        &session_id,
+                                        &path,
+                                        &artifact_root,
+                                    );
                                     let mut resolve = serde_json::json!({
                                         "big": big,
                                         "sub": sub,
@@ -326,7 +326,8 @@ pub fn stream_deck(
             }
             if let Some(path) = find_newest_artifact(&session_dir, ext) {
                 let (big, sub) = artifact_label(&path);
-                let url = artifact_url(&session_id, &path, &artifact_root);
+                let url =
+                    artifacts::public_url(&user_id, &session_id, &path, &artifact_root);
                 let mut resolve = serde_json::json!({
                     "big": big,
                     "sub": sub,

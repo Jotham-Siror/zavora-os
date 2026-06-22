@@ -302,15 +302,19 @@ async fn main() -> anyhow::Result<()> {
             "/api/agents/{agent_id}/wake",
             post(routes::agents::wake_agent),
         )
+        .route(
+            "/artifacts/{user_id}/{session_id}/{*path}",
+            get(routes::artifacts::get_scoped),
+        )
+        .route(
+            "/artifacts/{session_id}/{filename}",
+            get(routes::artifacts::get_legacy),
+        )
         .with_state(app_state)
         .merge(awp_router(awp_state))
         .layer(CorsLayer::very_permissive());
 
     let mut app = api.layer(Extension(session_store));
-
-    if Path::new(&config.artifact_dir).exists() {
-        app = app.nest_service("/artifacts", ServeDir::new(&config.artifact_dir));
-    }
 
     if Path::new(&config.audio_dir).exists() {
         app = app.nest_service("/audio", ServeDir::new(&config.audio_dir));

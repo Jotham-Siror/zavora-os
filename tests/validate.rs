@@ -412,6 +412,22 @@ async fn ui_session_persists_across_store_instances() {
 }
 
 #[tokio::test]
+async fn artifact_paths_are_user_scoped() {
+    use spatial_os::artifacts;
+
+    let root = std::path::Path::new("/tmp/zavora-artifacts");
+    let user = "user-1";
+    let session = "sess-1";
+    let dir = artifacts::session_dir(root, user, session);
+    assert!(dir.ends_with("user-1/sess-1"));
+    let file = dir.join("pitch_deck.pptx");
+    let url = artifacts::public_url(user, session, &file, root).expect("url");
+    assert_eq!(url, "/artifacts/user-1/sess-1/pitch_deck.pptx");
+    let outside = root.join("other/file");
+    assert!(artifacts::public_url(user, session, &outside, root).is_none());
+}
+
+#[tokio::test]
 async fn pg_agent_session_roundtrip() {
     use adk_session::{CreateRequest, GetRequest, SessionService};
     use spatial_os::pg_session::PgSessionService;

@@ -1,5 +1,6 @@
 pub mod ambient;
 pub mod agents;
+pub mod artifacts;
 pub mod auth;
 pub mod config;
 pub mod db;
