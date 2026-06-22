@@ -1,0 +1,45 @@
+site_name = "Zavora OS"
+site_description = "The agentic operating system that works while you live — spatial field UI with live agent orchestration."
+domain = "localhost:8080"
+contact = "hello@zavora.example"
+
+[business]
+name = "Zavora"
+country = "US"
+languages = ["en"]
+currency = "USD"
+timezone = "America/Los_Angeles"
+
+[brand_voice]
+tone = "warm, confident, quietly witty"
+greeting = "Good morning. Here's your day — meetings, emails, and a free window at noon."
+escalation_message = "Let me connect you with the Zavora team."
+
+[[capabilities]]
+name = "submit_intent"
+description = "Submit a natural-language intent and receive live orchestration events"
+endpoint = "/api/sessions/{session_id}/intent"
+method = "POST"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "create_session"
+description = "Create an ephemeral browser session"
+endpoint = "/api/sessions"
+method = "POST"
+access_level = "anonymous"
+
+[[policies]]
+name = "privacy"
+description = "Sessions are in-memory only until persistence ships (M4). No tracking beyond the session."
+policy_type = "privacy"
+
+[[policies]]
+name = "rate-limiting"
+description = "Anonymous: 60 req/min per IP for intent submission."
+policy_type = "rate-limiting"
+
+[support]
+escalation_contacts = ["hello@zavora.example"]
+hours = "24/7 (demo)"
+sla = "best-effort"

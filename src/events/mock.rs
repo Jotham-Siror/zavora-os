@@ -1,0 +1,190 @@
+use std::convert::Infallible;
+use std::time::Duration;
+
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+
+use super::sse::{to_event, FieldEvent};
+
+pub fn pick_scenario(text: &str) -> &'static str {
+    let t = text.to_lowercase();
+    if t.contains("deck")
+        || t.contains("pitch")
+        || t.contains("presentation")
+        || t.contains("slides")
+        || t.contains("document")
+        || t.contains("report")
+    {
+        return "deck";
+    }
+    if t.contains("people")
+        || t.contains("team")
+        || t.contains("family")
+        || t.contains("catch me up")
+    {
+        return "people";
+    }
+    if t.contains("live")
+        || t.contains("news")
+        || t.contains("happening")
+        || t.contains("market")
+    {
+        return "live";
+    }
+    if t.contains("proactive")
+        || t.contains("background")
+        || t.contains("working on")
+        || t.contains("found")
+    {
+        return "proactive";
+    }
+    if t.contains("morning") || t.contains("ready") || t.contains("start my day") {
+        return "morning";
+    }
+    if t.contains("week") || t.contains("summar") {
+        return "week";
+    }
+    "lisbon"
+}
+
+fn suzy_summary(key: &str) -> &'static str {
+    match key {
+        "lisbon" => "You can be in Lisbon Friday night for <b>$284</b>, staying at a riverside Alfama loft for <b>$96 a night</b>. I drafted a 3-day plan — just say the word and I’ll hold both.",
+        "morning" => "Good morning. You have <b>3 meetings</b>, a free window <b>12–2pm</b>, and <b>2 emails</b> that actually need you. Everything else I’ve handled.",
+        "week" => "This week you spent <b>$1,240</b> — mostly travel and groceries — slept <b>6.1h</b> a night, and shipped <b>14 commits</b>. My one suggestion: protect Tuesday mornings.",
+        "deck" => "Your numbers, story and slides are ready. Say <b>combine</b> and I’ll merge them into one finished deck.",
+        "people" => "Three people are waiting on you — <b>Alex</b>, <b>Priya</b> and <b>#dev-team</b>. I’ve drafted replies and prepped your 3pm one-on-one.",
+        "live" => "Here’s what’s happening — rates paused, chips rallying, your portfolio <b>up 0.8%</b>, and a keynote is live now.",
+        "proactive" => "While you were away I did a few things — researched <b>ABC Corp</b>, caught a <b>12% price drop</b>, and made a couple of things you might like.",
+        _ => "All set — ask me for anything else.",
+    }
+}
+
+fn scenario_cards(key: &str) -> &'static str {
+    match key {
+        "deck" => r#"[
+          {"glyph":"📊","title":"Auto-Excel","agent":"auto-excel","surface":"excel","delay":0,
+           "stream":["Pulling Q3 numbers…","Building the revenue chart…"],
+           "resolve":{"big":"+38% QoQ","sub":"Revenue model · 4 sheets · 1 chart","actions":["Save","Open"]}},
+          {"glyph":"📝","title":"Auto-Docs","agent":"auto-docs","surface":"docs","delay":250,
+           "stream":["Drafting the narrative…","Tightening the story…"],
+           "resolve":{"big":"1,240 words","sub":"Exec summary · problem · ask","actions":["Save","Open"]}},
+          {"glyph":"🖼️","title":"Auto-Slides","agent":"auto-slides","surface":"slides","delay":500,"waitsFor":2,
+           "stream":["Waiting for numbers & story…"],
+           "resolve":{"big":"10 slides","sub":"Pitch deck · ready to combine","actions":["Save deck","Present"]}}
+        ]"#,
+        "morning" => r#"[
+          {"glyph":"📅","title":"Today","agent":"calendar.agent","delay":0,
+           "stream":["Reading your calendar…"],
+           "resolve":{"big":"3 meetings","sub":"First: Standup 9:30 · gap 12–2pm free","actions":["Open","Reschedule"]}},
+          {"glyph":"✉️","title":"Needs you","agent":"inbox.agent","delay":250,"attention":true,
+           "stream":["Triaging 38 new emails…","Surfacing only what matters…"],
+           "resolve":{"big":"2 to reply","sub":"Client contract · Mara re: launch date","actions":["Draft replies","Snooze"]}},
+          {"glyph":"📰","title":"Brief","agent":"news.agent","delay":500,"waitsFor":2,
+           "stream":["Composing your brief…"],
+           "resolve":{"lines":["<b>Fri</b> — arrive, sunset at Miradouro","<b>Sat</b> — Sintra day trip","<b>Sun</b> — fly home"],"actions":["Read aloud","Dismiss"]}}
+        ]"#,
+        "lisbon" => r#"[
+          {"glyph":"✈️","title":"Flights","agent":"travel.agent","delay":0,
+           "stream":["Scanning 40+ carriers for Lisbon…","Comparing price vs. travel time…"],
+           "resolve":{"big":"$284 · TAP Air","sub":"Fri 6:40pm → Sun 9:15pm · 1 stop","actions":["Hold seat","Compare"]}},
+          {"glyph":"🏠","title":"Stay","agent":"stay.agent","delay":250,
+           "stream":["Matching neighborhoods to your taste…","Filtering for walkable + great views…"],
+           "resolve":{"big":"Alfama loft","sub":"$96/night · 9.4 · river view","actions":["Reserve","See 6 more"]}},
+          {"glyph":"🗺️","title":"Itinerary","agent":"planner.agent","delay":500,"waitsFor":2,
+           "stream":["Waiting for flights & stay…"],
+           "resolve":{"lines":["<b>Fri</b> — arrive, sunset","<b>Sat</b> — Sintra","<b>Sun</b> — fly home"],"actions":["Save plan","Tweak"]}}
+        ]"#,
+        _ => r#"[
+          {"glyph":"📊","title":"Auto-Excel","agent":"auto-excel","surface":"excel","delay":0,
+           "stream":["Working…"],
+           "resolve":{"big":"Ready","sub":"Demo card","actions":["Open"]}}
+        ]"#,
+    }
+}
+
+pub fn stream_intent(text: &str) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
+    let (tx, rx) = mpsc::channel(64);
+    let text = text.to_string();
+
+    tokio::spawn(async move {
+        let key = pick_scenario(&text);
+        let cards: Vec<serde_json::Value> =
+            serde_json::from_str(scenario_cards(key)).unwrap_or_default();
+
+        let _ = tx
+            .send(Ok(to_event(&FieldEvent::Scenario {
+                key: key.into(),
+                text: text.clone(),
+                total_cards: cards.len(),
+            })))
+            .await;
+
+        let mut resolved = 0usize;
+
+        for (index, card) in cards.iter().enumerate() {
+            let delay_ms = card.get("delay").and_then(|v| v.as_u64()).unwrap_or(0);
+            tokio::time::sleep(Duration::from_millis(500 + delay_ms)).await;
+
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::CardSpawn {
+                    index,
+                    card: card.clone(),
+                })))
+                .await;
+
+            if let Some(stream) = card.get("stream").and_then(|v| v.as_array()) {
+                for line in stream {
+                    let line = line.as_str().unwrap_or("");
+                    let _ = tx
+                        .send(Ok(to_event(&FieldEvent::CardStatus {
+                            index,
+                            status: "working".into(),
+                            line: Some(line.into()),
+                        })))
+                        .await;
+                    tokio::time::sleep(Duration::from_millis(720)).await;
+                }
+            }
+
+            let waits_for = card
+                .get("waitsFor")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
+            if waits_for > 0 {
+                while resolved < waits_for {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::CardStatus {
+                        index,
+                        status: "composing".into(),
+                        line: None,
+                    })))
+                    .await;
+                tokio::time::sleep(Duration::from_millis(600)).await;
+            }
+
+            if let Some(resolve) = card.get("resolve") {
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::CardResolve {
+                        index,
+                        resolve: resolve.clone(),
+                    })))
+                    .await;
+            }
+            resolved += 1;
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let _ = tx
+            .send(Ok(to_event(&FieldEvent::SuzySummary {
+                key: key.into(),
+                html: suzy_summary(key).into(),
+            })))
+            .await;
+        let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+    });
+
+    ReceiverStream::new(rx)
+}
