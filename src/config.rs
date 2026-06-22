@@ -53,7 +53,7 @@ impl AppConfig {
             ),
             google_api_key: std::env::var("GOOGLE_API_KEY").ok().filter(|k| !k.is_empty()),
             gemini_model: std::env::var("GEMINI_MODEL")
-                .unwrap_or_else(|_| "gemini-2.5-flash".into()),
+                .unwrap_or_else(|_| "gemini-3.1-flash-lite".into()),
         })
     }
 
