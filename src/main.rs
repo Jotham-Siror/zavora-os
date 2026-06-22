@@ -243,6 +243,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/greeting", get(routes::greeting::get_greeting))
         .route("/api/people", get(routes::people::get_people))
         .route("/api/live", get(routes::live::get_live))
+        .route("/api/rails/background", get(routes::background::get_background))
         .route("/api/ambient", get(routes::ambient::stream_ambient))
         .route("/api/ambient/status", get(routes::ambient::list_ambient))
         .route("/api/ambient/dnd", post(routes::ambient::set_dnd))

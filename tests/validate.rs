@@ -308,6 +308,45 @@ async fn greeting_agent_builds_with_gemini() {
 }
 
 #[tokio::test]
+async fn people_rail_unavailable_without_slack() {
+    let rail = spatial_os::rails::people::fetch(None).await;
+    assert_eq!(rail.source, "unavailable");
+    assert!(rail.work.is_empty());
+    assert!(rail.family.is_empty());
+    assert!(rail.message.as_deref().unwrap_or("").contains("Slack"));
+}
+
+#[tokio::test]
+async fn live_slides_from_mcp_news() {
+    let paths = common::mcp_paths();
+    common::assert_mcp_binaries_exist(&paths);
+
+    let news = Arc::new(mcp::spawn_mcp_server(&paths.news).await.expect("news mcp"));
+    let (source, slides) = spatial_os::rails::live::fetch_slides(news).await;
+    assert!(
+        source == "mcp-news" || source == "unavailable",
+        "unexpected source: {source}"
+    );
+    if source == "mcp-news" {
+        assert!(!slides.is_empty(), "expected headlines from hn_stories");
+        assert!(!slides[0].body.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn background_cards_reflect_empty_integrations() {
+    use spatial_os::rails::background;
+
+    let cards = background::build(&[], &[], &[], &[]);
+    assert!(!cards.is_empty(), "should still emit flank card shells");
+    let people = cards.iter().find(|c| c.kind == "people").expect("people card");
+    assert_eq!(people.title, "People");
+    assert!(people.rows.is_empty());
+    let live = cards.iter().find(|c| c.kind == "live").expect("live card");
+    assert_eq!(live.sub, "headlines");
+}
+
+#[tokio::test]
 async fn ambient_store_tracks_agent_lifecycle() {
     use spatial_os::ambient::AmbientStore;
 

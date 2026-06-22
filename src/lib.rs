@@ -4,6 +4,7 @@ pub mod config;
 pub mod greeting;
 pub mod events;
 pub mod orchestrator;
+pub mod rails;
 pub mod routes;
 pub mod scenarios;
 pub mod state;

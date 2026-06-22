@@ -322,8 +322,10 @@
     submit(text) {
       submitLive(text).catch((err) => {
         if (err.name === 'AbortError') return;
-        console.warn('live intent failed, falling back to demo', err);
-        ui.legacySubmit(text);
+        console.error('[zavora] live intent failed', err);
+        const msg = `Could not reach the server — ${err.message || 'try again'}.`;
+        if (ui.showSuzyCustom) ui.showSuzyCustom(msg);
+        else alert(msg);
       });
     },
   };

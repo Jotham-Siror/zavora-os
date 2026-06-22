@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use adk_tool::SimpleToolContext;
 use chrono::Timelike;
 use serde::Serialize;
 
 use crate::agents::morning::MorningMcpPool;
+use crate::tools::mcp_exec;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct CalendarFacts {
@@ -104,35 +104,14 @@ pub async fn gather(pool: Option<&MorningMcpPool>) -> GreetingSnapshot {
     snap
 }
 
-async fn exec_tool(
-    toolset: Arc<dyn adk_core::Toolset>,
-    tool_name: &str,
-    args: serde_json::Value,
-) -> Option<serde_json::Value> {
-    let ctx: Arc<dyn adk_core::ReadonlyContext> =
-        Arc::new(SimpleToolContext::new("greeting-context"));
-    let tools = toolset.tools(ctx.clone()).await.ok()?;
-    let tool = tools.iter().find(|t| t.name() == tool_name)?;
-    tool.execute(
-        Arc::new(SimpleToolContext::new("greeting-context")) as Arc<dyn adk_core::ToolContext>,
-        args,
-    )
-    .await
-    .ok()
-}
-
-fn tool_output_string(resp: &serde_json::Value) -> Option<&str> {
-    resp.get("output").and_then(|o| o.as_str())
-}
-
 async fn fetch_calendar(toolset: Arc<dyn adk_core::Toolset>) -> Option<CalendarFacts> {
-    let resp = exec_tool(
+    let resp = mcp_exec::exec_tool(
         toolset,
         "get_today",
         serde_json::json!({ "calendar_id": "primary" }),
     )
     .await?;
-    let output = tool_output_string(&resp)?;
+    let output = mcp_exec::tool_output_string(&resp)?;
     let events = serde_json::from_str::<serde_json::Value>(output)
         .ok()
         .and_then(|v| v.as_array().cloned())
@@ -157,8 +136,8 @@ async fn fetch_calendar(toolset: Arc<dyn adk_core::Toolset>) -> Option<CalendarF
 }
 
 async fn fetch_inbox(toolset: Arc<dyn adk_core::Toolset>) -> Option<InboxFacts> {
-    let resp = exec_tool(toolset, "list_inbox", serde_json::json!({ "limit": 12 })).await?;
-    let output = tool_output_string(&resp)?;
+    let resp = mcp_exec::exec_tool(toolset, "list_inbox", serde_json::json!({ "limit": 12 })).await?;
+    let output = mcp_exec::tool_output_string(&resp)?;
     let messages = serde_json::from_str::<serde_json::Value>(output)
         .ok()
         .and_then(|v| v.as_array().cloned())
@@ -198,27 +177,16 @@ fn headline_from_articles(articles: &[serde_json::Value]) -> Option<NewsFacts> {
     })
 }
 
-fn parse_articles_json(output: &str) -> Option<Vec<serde_json::Value>> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    if let Some(arr) = value.as_array() {
-        return Some(arr.clone());
-    }
-    value
-        .get("articles")
-        .and_then(|a| a.as_array())
-        .cloned()
-}
-
 async fn fetch_news(toolset: Arc<dyn adk_core::Toolset>) -> Option<NewsFacts> {
-    if let Some(resp) = exec_tool(
+    if let Some(resp) = mcp_exec::exec_tool(
         toolset.clone(),
         "gnews_top_headlines",
         serde_json::json!({ "country": "us", "limit": 3 }),
     )
     .await
     {
-        if let Some(output) = tool_output_string(&resp) {
-            if let Some(articles) = parse_articles_json(output) {
+        if let Some(output) = mcp_exec::tool_output_string(&resp) {
+            if let Some(articles) = mcp_exec::parse_array_output(output) {
                 if let Some(facts) = headline_from_articles(&articles) {
                     return Some(facts);
                 }
@@ -226,14 +194,14 @@ async fn fetch_news(toolset: Arc<dyn adk_core::Toolset>) -> Option<NewsFacts> {
         }
     }
 
-    let resp = exec_tool(
+    let resp = mcp_exec::exec_tool(
         toolset,
         "hn_stories",
         serde_json::json!({ "story_type": "top", "limit": 3 }),
     )
     .await?;
-    let output = tool_output_string(&resp)?;
-    let articles = parse_articles_json(output)?;
+    let output = mcp_exec::tool_output_string(&resp)?;
+    let articles = mcp_exec::parse_array_output(output)?;
     headline_from_articles(&articles)
 }
 
@@ -252,13 +220,13 @@ fn weather_code_label(code: i64) -> &'static str {
 }
 
 async fn fetch_weather(toolset: Arc<dyn adk_core::Toolset>) -> Option<WeatherFacts> {
-    let geo = exec_tool(
+    let geo = mcp_exec::exec_tool(
         toolset.clone(),
         "geocode_location",
         serde_json::json!({ "name": "San Francisco" }),
     )
     .await?;
-    let geo_out = tool_output_string(&geo)?;
+    let geo_out = mcp_exec::tool_output_string(&geo)?;
     let geo_json: serde_json::Value = serde_json::from_str(geo_out).ok()?;
     let place = geo_json
         .get("results")
@@ -271,13 +239,13 @@ async fn fetch_weather(toolset: Arc<dyn adk_core::Toolset>) -> Option<WeatherFac
         .and_then(|v| v.as_str())
         .map(str::to_string);
 
-    let resp = exec_tool(
+    let resp = mcp_exec::exec_tool(
         toolset,
         "get_current_weather",
         serde_json::json!({ "latitude": lat, "longitude": lon }),
     )
     .await?;
-    let output = tool_output_string(&resp)?;
+    let output = mcp_exec::tool_output_string(&resp)?;
     let wx: serde_json::Value = serde_json::from_str(output).ok()?;
     let current = wx.get("current")?;
     let temp = current.get("temperature_2m").and_then(|v| v.as_f64());

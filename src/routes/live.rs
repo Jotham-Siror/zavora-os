@@ -1,35 +1,24 @@
 use axum::{extract::State, Json};
-use serde_json::json;
+use serde::Serialize;
 
+use crate::rails::live;
 use crate::state::AppState;
 
-/// Live carousel slides — mcp-news when live stack enabled, demo fallback.
-pub async fn get_live(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let source = if state.scenario_flags.live { "mcp-news" } else { "demo" };
+#[derive(Serialize)]
+pub struct LiveResponse {
+    pub source: String,
+    pub slides: Vec<live::LiveSlide>,
+}
 
-    Json(json!({
-        "source": source,
-        "slides": [
-            {
-                "cls": "lf-cnn",
-                "logo": "C",
-                "name": "Headlines",
-                "when": "now",
-                "body": if source == "mcp-news" {
-                    "Live headlines from mcp-news — open a Live scenario for full cards"
-                } else {
-                    "Breaking: central banks signal a pause on rate hikes"
-                },
-                "meta": if source == "mcp-news" { "mcp-news" } else { "World · 2m read" }
-            },
-            {
-                "cls": "lf-bloomberg",
-                "logo": "B",
-                "name": "Markets",
-                "when": "4m",
-                "body": "Markets edge up ahead of the open; chips lead gains",
-                "meta": "Markets"
-            }
-        ]
-    }))
+/// Live carousel — real headlines from mcp-news when the live stack is enabled.
+pub async fn get_live(State(state): State<AppState>) -> Json<LiveResponse> {
+    if let Some(pool) = state.live_mcp.as_ref() {
+        let (source, slides) = live::fetch_slides(pool.news.clone()).await;
+        return Json(LiveResponse { source, slides });
+    }
+
+    Json(LiveResponse {
+        source: "unavailable".into(),
+        slides: vec![],
+    })
 }
