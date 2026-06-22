@@ -5,7 +5,9 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use super::sse::{to_event, ConductStep, FieldEvent};
-use crate::scenarios;
+use crate::orchestrator::coordinator;
+use crate::scenarios::{self, tour};
+use crate::state::SessionStore;
 
 pub fn pick_scenario(text: &str) -> &'static str {
     let t = text.to_lowercase();
@@ -105,17 +107,38 @@ fn scenario_cards(key: &str) -> &'static str {
 }
 
 pub fn stream_intent(text: &str) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
+    stream_intent_with_scenario(
+        pick_scenario(text),
+        text,
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
+pub fn stream_intent_with_scenario(
+    key: &str,
+    text: &str,
+    suzy_runner: Option<std::sync::Arc<adk_runner::Runner>>,
+    sessions: Option<SessionStore>,
+    session_id: Option<String>,
+    user_id: Option<String>,
+) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
     let (tx, rx) = mpsc::channel(64);
     let text = text.to_string();
+    let key = key.to_string();
 
     tokio::spawn(async move {
-        let key = pick_scenario(&text);
+        if let (Some(store), Some(sid)) = (&sessions, &session_id) {
+            store.set_scenario(sid, &key, Some(&text)).await;
+        }
         let cards: Vec<serde_json::Value> =
-            serde_json::from_str(scenario_cards(key)).unwrap_or_default();
+            serde_json::from_str(scenario_cards(&key)).unwrap_or_default();
 
         let _ = tx
             .send(Ok(to_event(&FieldEvent::Scenario {
-                key: key.into(),
+                key: key.clone(),
                 text: text.clone(),
                 total_cards: cards.len(),
             })))
@@ -178,12 +201,36 @@ pub fn stream_intent(text: &str) -> ReceiverStream<Result<axum::response::sse::E
         }
 
         tokio::time::sleep(Duration::from_millis(500)).await;
-        let _ = tx
-            .send(Ok(to_event(&FieldEvent::SuzySummary {
-                key: key.into(),
-                html: suzy_summary(key).into(),
-            })))
+        if let (Some(store), Some(sid), Some(uid)) =
+            (&sessions, &session_id, &user_id)
+        {
+            coordinator::emit_suzy_and_suggest(
+                &tx,
+                suzy_runner.as_ref(),
+                store,
+                sid,
+                uid,
+                &key,
+            )
             .await;
+        } else {
+            let html = suzy_summary(&key).to_string();
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::SuzySummary {
+                    key: key.clone(),
+                    html: html.clone(),
+                    audio_clip: coordinator::audio_clip_for(&html, &key),
+                })))
+                .await;
+            if let Some(action) = tour::action_prompt(&key) {
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::Suggest {
+                        text: action.into(),
+                        kind: "action".into(),
+                    })))
+                    .await;
+            }
+        }
         let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
     });
 
@@ -260,6 +307,7 @@ pub fn stream_action(
             tokio::time::sleep(Duration::from_millis(900)).await;
         }
 
+        coordinator::emit_tour_advance(&tx, key).await;
         let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
     });
 

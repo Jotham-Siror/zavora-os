@@ -7,4 +7,6 @@ pub mod excel;
 pub mod gemini;
 pub mod inbox;
 pub mod morning;
+pub mod router;
 pub mod slides;
+pub mod suzy;

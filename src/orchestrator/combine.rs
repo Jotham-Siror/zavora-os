@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::sse::{to_event, ConductStep, FieldEvent};
-use crate::orchestrator::persist;
+use crate::orchestrator::{coordinator, persist};
 use crate::state::{SessionArtifacts, SessionStore};
 
 fn deck_conduct_steps() -> Vec<ConductStep> {
@@ -133,6 +133,7 @@ pub fn stream_combine(
     intent: String,
     artifact_root: PathBuf,
     sessions: SessionStore,
+    scenario: Option<String>,
 ) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
     let (tx, rx) = mpsc::channel(64);
 
@@ -310,6 +311,8 @@ pub fn stream_combine(
         }
 
         tokio::time::sleep(Duration::from_millis(300)).await;
+        let current = scenario.as_deref().unwrap_or("deck");
+        coordinator::emit_tour_advance(&tx, current).await;
         let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
     });
 

@@ -1,5 +1,7 @@
 //! Progressive live vs mock routing — scenarios go live as milestones ship.
 
+pub mod tour;
+
 use crate::events::mock;
 
 /// Detect scenario from natural-language intent (shared with mock layer).

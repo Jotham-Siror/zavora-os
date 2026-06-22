@@ -9,9 +9,8 @@ use futures::StreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
-use crate::orchestrator::persist;
+use crate::orchestrator::{coordinator, persist};
 use crate::state::{SessionArtifacts, SessionStore};
 
 fn deck_cards() -> Vec<serde_json::Value> {
@@ -138,6 +137,7 @@ pub fn stream_deck(
     intent: String,
     artifact_root: PathBuf,
     sessions: Option<SessionStore>,
+    suzy_runner: Option<Arc<Runner>>,
 ) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
     let (tx, rx) = mpsc::channel(128);
 
@@ -360,12 +360,17 @@ pub fn stream_deck(
         }
 
         tokio::time::sleep(Duration::from_millis(400)).await;
-        let _ = tx
-            .send(Ok(to_event(&FieldEvent::SuzySummary {
-                key: "deck".into(),
-                html: mock::suzy_summary("deck").into(),
-            })))
+        if let Some(ref store) = sessions {
+            coordinator::emit_suzy_and_suggest(
+                &tx,
+                suzy_runner.as_ref(),
+                store,
+                &session_id,
+                &user_id,
+                "deck",
+            )
             .await;
+        }
         let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
     });
 

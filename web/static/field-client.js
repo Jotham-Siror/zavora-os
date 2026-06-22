@@ -253,7 +253,10 @@
         console.warn('[zavora] orchestration error', ev.message);
         break;
       case 'suzy_summary':
-        ui.showSuzyCustom(ev.html);
+        ui.showSuzyCustom(ev.html, ev.audio_clip);
+        break;
+      case 'suggest':
+        if (ui.armSuggestion) ui.armSuggestion(ev.text);
         break;
       case 'done':
         break;

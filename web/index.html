@@ -1969,11 +1969,14 @@ window.__ZAVORA_UI__ = {
   setCurrentKey(v) { currentKey = v; },
   setResolvedCount(v) { resolvedCount = v; },
   setTotalCards(v) { totalCards = v; },
-  showSuzyCustom(html) {
+  armSuggestion,
+  showSuzyCustom(html, audioClip) {
     suzyText.innerHTML = html;
     suzy.classList.add('show');
-    speak(suzyText.textContent);
-    setTimeout(() => armSuggestion(actionPrompt[currentKey]), 1600);
+    speak(audioClip || suzyText.textContent);
+    if (window.__ZAVORA_DEMO__) {
+      setTimeout(() => armSuggestion(actionPrompt[currentKey]), 1600);
+    }
   },
 };
 

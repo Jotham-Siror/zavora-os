@@ -123,6 +123,40 @@ async fn mock_combine_action_stream_completes_with_events() {
     );
 }
 
+#[test]
+fn tour_prompts_advance_in_order() {
+    use spatial_os::scenarios::tour;
+
+    assert_eq!(tour::next_scenario("morning"), Some("people"));
+    assert_eq!(tour::action_prompt("deck"), Some("combine"));
+    assert_eq!(tour::scenario_prompt("live"), Some("What is happening live"));
+}
+
+#[test]
+fn keyword_router_still_maps_pitch_to_deck() {
+    assert_eq!(mock::pick_scenario("pitch presentation"), "deck");
+    assert_eq!(mock::pick_scenario("Start my day"), "morning");
+}
+
+#[tokio::test]
+async fn router_agent_builds_with_gemini() {
+    let api_key = common::google_api_key();
+    let agent =
+        spatial_os::agents::router::build(&api_key, &common::gemini_model())
+            .await
+            .expect("router should build");
+    assert_eq!(agent.name(), "intent_router");
+}
+
+#[tokio::test]
+async fn suzy_agent_builds_with_gemini() {
+    let api_key = common::google_api_key();
+    let agent = spatial_os::agents::suzy::build(&api_key, &common::gemini_model())
+        .await
+        .expect("suzy should build");
+    assert_eq!(agent.name(), "suzy_coordinator");
+}
+
 #[tokio::test]
 async fn session_persistence_cards_and_agents() {
     let store = spatial_os::state::SessionStore::new();

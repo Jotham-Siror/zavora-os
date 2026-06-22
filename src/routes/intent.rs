@@ -34,6 +34,7 @@ pub async fn submit_intent(
         user_id: record.user_id,
         text: body.text,
     })
+    .await
 }
 
 /// A2A stub that forwards intent text to the same mock orchestrator acknowledgement.

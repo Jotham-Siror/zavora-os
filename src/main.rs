@@ -75,13 +75,33 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let mut router_runner = None;
+    let mut suzy_runner = None;
+    let coordinator_enabled = config.agents_enabled();
+
+    if coordinator_enabled {
+        match boot_coordinator_stack(&config, session_service.clone()).await {
+            Ok((router, suzy)) => {
+                tracing::info!("Suzy coordinator + LLM router enabled");
+                router_runner = Some(router);
+                suzy_runner = Some(suzy);
+            }
+            Err(e) => {
+                tracing::warn!("Coordinator unavailable ({e:#}) — keyword routing + static summaries");
+            }
+        }
+    }
+
     let app_state = AppState::new(
         config.artifact_dir.clone(),
         deck_enabled,
         morning_enabled,
+        coordinator_enabled,
         deck_runner,
         combine_runner,
         morning_runner,
+        router_runner,
+        suzy_runner,
         session_service,
         deck_mcp,
         morning_mcp,
@@ -274,6 +294,38 @@ async fn boot_morning_stack(
     );
 
     Ok((runner, pool))
+}
+
+async fn boot_coordinator_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<Runner>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let router_agent =
+        spatial_os::agents::router::build(api_key, &config.gemini_model).await?;
+    let suzy_agent = spatial_os::agents::suzy::build(api_key, &config.gemini_model).await?;
+
+    let router_runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-router")
+            .agent(router_agent)
+            .session_service(session_service.clone())
+            .build()?,
+    );
+
+    let suzy_runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-suzy")
+            .agent(suzy_agent)
+            .session_service(session_service)
+            .build()?,
+    );
+
+    Ok((router_runner, suzy_runner))
 }
 
 fn awp_router(state: AwpState) -> Router {

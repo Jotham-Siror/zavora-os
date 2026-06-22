@@ -34,6 +34,12 @@ pub enum FieldEvent {
     SuzySummary {
         key: String,
         html: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        audio_clip: Option<String>,
+    },
+    Suggest {
+        text: String,
+        kind: String,
     },
     Conduct {
         steps: Vec<ConductStep>,
