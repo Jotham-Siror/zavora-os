@@ -56,6 +56,15 @@
     backdrop-filter: blur(12px); pointer-events: none; }
   .demo-banner b { color: #ffe8b8; font-weight: 600; }
 
+  .auth-pill { position: fixed; top: 14px; right: 18px; z-index: 40;
+    display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+  .auth-pill a, .auth-pill button {
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--stroke);
+    background: var(--glass); color: var(--muted); cursor: pointer; text-decoration: none;
+    backdrop-filter: blur(12px); font: inherit; }
+  .auth-pill a:hover, .auth-pill button:hover { color: var(--ink); background: rgba(255,255,255,.08); }
+  .auth-pill .signed { color: var(--ink); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* ---------- stage ---------- */
   .stage { position: relative; z-index: 2; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
     align-items: center; justify-content: center; padding: 4vh 5vw; }
@@ -567,6 +576,7 @@
   <div class="aurora"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
   <div class="grain"></div>
   <div class="demo-banner" id="demoBanner" hidden><b>Demo mode</b> — scripted scenarios. Remove <code>?demo=1</code> for live rails.</div>
+  <div class="auth-pill" id="authPill" hidden></div>
 
   <div class="hand" id="hand"></div>
 
@@ -702,6 +712,29 @@ window.__ZAVORA_DEMO__ =
   new URLSearchParams(location.search).get('demo') === '1' ||
   localStorage.getItem('zavora_demo') === '1';
 if (window.__ZAVORA_DEMO__) document.getElementById('demoBanner')?.removeAttribute('hidden');
+
+async function hydrateAuthPill() {
+  if (window.__ZAVORA_DEMO__) return;
+  const pill = document.getElementById('authPill');
+  if (!pill) return;
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    if (res.status === 404 || res.status === 501) return;
+    pill.removeAttribute('hidden');
+    if (res.ok) {
+      const user = await res.json();
+      const label = user.name || user.email || 'Signed in';
+      pill.innerHTML = `<span class="signed">${label}</span><button type="button" id="authLogout">Sign out</button>`;
+      document.getElementById('authLogout')?.addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+        location.reload();
+      });
+    } else {
+      pill.innerHTML = '<a href="/api/auth/google">Sign in with Google</a>';
+    }
+  } catch (_) { /* auth not configured */ }
+}
+hydrateAuthPill();
 
 const cardsEl = document.getElementById('cards');
 // layout helpers — keep JS behaviour aligned with the CSS tiers

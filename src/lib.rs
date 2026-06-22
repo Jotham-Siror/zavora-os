@@ -1,6 +1,9 @@
 pub mod ambient;
 pub mod agents;
+pub mod auth;
 pub mod config;
+pub mod db;
+pub mod pg_session;
 pub mod greeting;
 pub mod events;
 pub mod orchestrator;

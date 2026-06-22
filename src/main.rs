@@ -5,10 +5,13 @@ use spatial_os::agents::morning::{self, MorningMcpPool};
 use spatial_os::agents::people::{self, PeopleMcpPool};
 use spatial_os::agents::week::{self, WeekMcpPool};
 use spatial_os::ambient::{service, AmbientStore};
+use spatial_os::auth::{self, AuthState};
 use spatial_os::config::AppConfig;
+use spatial_os::db;
+use spatial_os::pg_session::PgSessionService;
 use spatial_os::routes;
 use spatial_os::scenarios::ScenarioLiveFlags;
-use spatial_os::state::AppState;
+use spatial_os::state::{AppState, SessionStore, SharedSessionService};
 use spatial_os::tools;
 
 use std::path::Path;
@@ -51,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
         });
     let brand_tone = biz.brand_voice.as_ref().and_then(|b| b.tone.clone());
 
-    let session_service = Arc::new(InMemorySessionService::new());
+    let (session_service, session_store, auth_state) = boot_persistence(&config).await?;
 
     let mut deck_runner = None;
     let mut combine_runner = None;
@@ -202,6 +205,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let app_state = AppState::new(
+        session_store,
         config.artifact_dir.clone(),
         scenario_flags,
         coordinator_enabled,
@@ -215,6 +219,7 @@ async fn main() -> anyhow::Result<()> {
         router_runner,
         suzy_runner,
         session_service,
+        auth_state.clone(),
         deck_mcp,
         morning_mcp,
         live_mcp,
@@ -248,7 +253,23 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/ambient/status", get(routes::ambient::list_ambient))
         .route("/api/ambient/dnd", post(routes::ambient::set_dnd))
         .route("/api/oauth/{provider}", get(routes::oauth::oauth_guide))
-        .route("/api/sessions", post(routes::session::create_session))
+        .route("/api/sessions", post(routes::session::create_session));
+
+    let mut api = api;
+
+    if let Some(auth) = auth_state {
+        api = api
+            .merge(
+                Router::new()
+                    .route("/api/auth/google", get(auth::google_redirect))
+                    .route("/api/auth/google/callback", get(auth::google_callback))
+                    .route("/api/auth/me", get(auth::me))
+                    .route("/api/auth/logout", post(auth::logout))
+                    .with_state(auth),
+            );
+    }
+
+    let api = api
         .route(
             "/api/sessions/{session_id}/intent",
             post(routes::intent::submit_intent),
@@ -319,7 +340,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn boot_deck_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<Runner>, Arc<McpPool>)> {
     let api_key = config
         .google_api_key
@@ -367,7 +388,7 @@ async fn boot_deck_stack(
 
 async fn boot_morning_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<MorningMcpPool>)> {
     let api_key = config
         .google_api_key
@@ -422,7 +443,7 @@ async fn boot_morning_stack(
 
 async fn boot_coordinator_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<Runner>)> {
     let api_key = config
         .google_api_key
@@ -454,7 +475,7 @@ async fn boot_coordinator_stack(
 
 async fn boot_live_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<LiveMcpPool>)> {
     let api_key = config
         .google_api_key
@@ -487,7 +508,7 @@ async fn boot_live_stack(
 
 async fn boot_people_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<PeopleMcpPool>)> {
     let api_key = config
         .google_api_key
@@ -523,7 +544,7 @@ async fn boot_people_stack(
 
 async fn boot_week_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<WeekMcpPool>)> {
     let api_key = config
         .google_api_key
@@ -557,7 +578,7 @@ async fn boot_week_stack(
 
 async fn boot_greeting_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<Arc<Runner>> {
     let api_key = config
         .google_api_key
@@ -590,7 +611,7 @@ async fn boot_greeting_stack(
 async fn boot_ambient_stack(
     config: &AppConfig,
     store: AmbientStore,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
     event_service: Arc<InMemoryEventSubscriptionService>,
 ) -> anyhow::Result<(service::AmbientService, bool)> {
     let news = tools::mcp::spawn_mcp_server(&config.mcp_news_path).await?;
@@ -620,7 +641,7 @@ async fn boot_ambient_stack(
 
 async fn boot_lisbon_stack(
     config: &AppConfig,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
 ) -> anyhow::Result<(Arc<Runner>, Arc<LisbonMcpPool>)> {
     let api_key = config
         .google_api_key
@@ -653,6 +674,47 @@ async fn boot_lisbon_stack(
             .build()?,
     );
     Ok((runner, pool))
+}
+
+async fn boot_persistence(
+    config: &AppConfig,
+) -> anyhow::Result<(
+    SharedSessionService,
+    SessionStore,
+    Option<Arc<AuthState>>,
+)> {
+    let Some(database_url) = config.database_url.as_deref() else {
+        tracing::info!("DATABASE_URL unset — in-memory sessions (M4 behaviour)");
+        return Ok((
+            Arc::new(InMemorySessionService::new()),
+            SessionStore::new(),
+            None,
+        ));
+    };
+
+    let pool = db::connect(database_url).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+    tracing::info!("Postgres connected — ui_sessions + agent_sessions persisted");
+
+    let session_service: SharedSessionService =
+        Arc::new(PgSessionService::new(pool.clone()));
+    let session_store = SessionStore::with_postgres(pool.clone());
+
+    let auth_state = config.jwt_secret.as_ref().map(|jwt_secret| {
+        Arc::new(AuthState {
+            db: pool,
+            jwt_secret: jwt_secret.clone(),
+            google_client_id: config.google_oauth_client_id.clone(),
+            google_client_secret: config.google_oauth_client_secret.clone(),
+            base_url: config.base_url.clone(),
+        })
+    });
+
+    if auth_state.is_some() {
+        tracing::info!("Google OAuth + JWT auth enabled");
+    }
+
+    Ok((session_service, session_store, auth_state))
 }
 
 fn awp_router(state: AwpState) -> Router {

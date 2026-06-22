@@ -27,6 +27,11 @@ pub struct AppConfig {
     pub mcp_real_estate_path: PathBuf,
     pub google_api_key: Option<String>,
     pub gemini_model: String,
+    pub database_url: Option<String>,
+    pub jwt_secret: Option<String>,
+    pub google_oauth_client_id: Option<String>,
+    pub google_oauth_client_secret: Option<String>,
+    pub base_url: String,
 }
 
 impl AppConfig {
@@ -120,7 +125,28 @@ impl AppConfig {
             google_api_key: std::env::var("GOOGLE_API_KEY").ok().filter(|k| !k.is_empty()),
             gemini_model: std::env::var("GEMINI_MODEL")
                 .unwrap_or_else(|_| "gemini-3.1-flash-lite".into()),
+            database_url: std::env::var("DATABASE_URL").ok().filter(|s| !s.is_empty()),
+            jwt_secret: std::env::var("JWT_SECRET").ok().filter(|s| !s.is_empty()),
+            google_oauth_client_id: std::env::var("GOOGLE_OAUTH_CLIENT_ID")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            google_oauth_client_secret: std::env::var("GOOGLE_OAUTH_CLIENT_SECRET")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            base_url: std::env::var("BASE_URL").unwrap_or_else(|_| {
+                let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+                let port = std::env::var("PORT").unwrap_or_else(|_| "9847".into());
+                format!("http://{host}:{port}")
+            }),
         })
+    }
+
+    pub fn postgres_enabled(&self) -> bool {
+        self.database_url.is_some()
+    }
+
+    pub fn auth_enabled(&self) -> bool {
+        self.jwt_secret.is_some() && self.postgres_enabled()
     }
 
     pub fn addr(&self) -> String {

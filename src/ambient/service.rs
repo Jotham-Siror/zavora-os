@@ -6,7 +6,8 @@ use adk_agent::ambient::{AmbientAgent, CronTrigger, TriggerHandler};
 use adk_awp::{AwpEvent, EventSubscriptionService, InMemoryEventSubscriptionService};
 use adk_core::{Content, SessionId, UserId};
 use adk_runner::Runner;
-use adk_session::{CreateRequest, InMemorySessionService, SessionService};
+use adk_session::{CreateRequest, SessionService};
+use crate::state::SharedSessionService;
 use chrono::Utc;
 use futures::{stream, StreamExt};
 use uuid::Uuid;
@@ -183,7 +184,7 @@ pub async fn boot(
     config: &AppConfig,
     pool: &AmbientMcpPool,
     store: AmbientStore,
-    session_service: Arc<InMemorySessionService>,
+    session_service: SharedSessionService,
     event_service: Arc<InMemoryEventSubscriptionService>,
 ) -> anyhow::Result<AmbientService> {
     let api_key = config

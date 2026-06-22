@@ -28,7 +28,7 @@
 
   async function ensureSession() {
     if (sessionId) return sessionId;
-    const res = await fetch('/api/sessions', { method: 'POST' });
+    const res = await fetch('/api/sessions', { method: 'POST', credentials: 'include' });
     if (!res.ok) throw new Error('session create failed');
     const data = await res.json();
     rememberSession(data.session_id);
@@ -37,8 +37,8 @@
 
   async function hydrateFromServer(sid) {
     const [cardsRes, agentsRes] = await Promise.all([
-      fetch(`/api/sessions/${sid}/cards`),
-      fetch(`/api/sessions/${sid}/agents`),
+      fetch(`/api/sessions/${sid}/cards`, { credentials: 'include' }),
+      fetch(`/api/sessions/${sid}/agents`, { credentials: 'include' }),
     ]);
     if (!cardsRes.ok) return false;
     const cardsData = await cardsRes.json();
@@ -66,6 +66,7 @@
     const id = agent || title;
     await fetch(`/api/agents/${encodeURIComponent(id)}/snooze`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, title, glyph, agent: id }),
     });
@@ -75,6 +76,7 @@
     await ensureSession();
     await fetch(`/api/agents/${encodeURIComponent(id)}/wake`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: sessionId,
@@ -89,6 +91,7 @@
     await ensureSession();
     await fetch(`/api/sessions/${sessionId}/commit`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ card_title: cardTitle, action_label: actionLabel }),
     });
@@ -306,6 +309,7 @@
     const endpoint = hasCards && isAction ? 'action' : 'intent';
     const res = await fetch(`/api/sessions/${sessionId}/${endpoint}`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',

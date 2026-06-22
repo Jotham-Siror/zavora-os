@@ -148,9 +148,23 @@ endpoint = "/api/rails/background"
 method = "GET"
 access_level = "anonymous"
 
+[[capabilities]]
+name = "google_oauth"
+description = "Sign in with Google — sets zo_session JWT cookie"
+endpoint = "/api/auth/google"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "auth_profile"
+description = "Current authenticated user profile"
+endpoint = "/api/auth/me"
+method = "GET"
+access_level = "known"
+
 [[policies]]
 name = "privacy"
-description = "Sessions are in-memory only until persistence ships (M4). No tracking beyond the session."
+description = "Sessions persist to Postgres when DATABASE_URL is set; otherwise in-memory per process."
 policy_type = "privacy"
 
 [[policies]]

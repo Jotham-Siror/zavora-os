@@ -308,6 +308,15 @@ async fn greeting_agent_builds_with_gemini() {
 }
 
 #[tokio::test]
+async fn session_store_create_for_user() {
+    let store = spatial_os::state::SessionStore::new();
+    let record = store.create_for_user("user-abc".into()).await;
+    assert_eq!(record.user_id, "user-abc");
+    let loaded = store.get(&record.session_id).await.expect("session");
+    assert_eq!(loaded.user_id, "user-abc");
+}
+
+#[tokio::test]
 async fn people_rail_unavailable_without_slack() {
     let rail = spatial_os::rails::people::fetch(None).await;
     assert_eq!(rail.source, "unavailable");
