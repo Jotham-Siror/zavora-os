@@ -43,6 +43,20 @@ endpoint = "/api/sessions/{session_id}/intent"
 method = "POST"
 access_level = "anonymous"
 
+[[capabilities]]
+name = "submit_action"
+description = "Submit an action turn (combine, handle it, …) and receive conduct SSE events"
+endpoint = "/api/sessions/{session_id}/action"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "fuse_cards"
+description = "Fuse one card into another — server-driven conduct gesture"
+endpoint = "/api/sessions/{session_id}/fuse"
+method = "POST"
+access_level = "known"
+
 [[policies]]
 name = "privacy"
 description = "Sessions are in-memory only until persistence ships (M4). No tracking beyond the session."

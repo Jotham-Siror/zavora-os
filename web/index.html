@@ -1802,16 +1802,21 @@ async function conductAction(){
 }
 
 // the finished, combined artifact persists (pinned), not minimized
-function finishDeck(){
+function finishDeck(opts){
   const deck = [...document.querySelectorAll('.card')].find(c => c.dataset.title === 'Auto-Slides');
   if (!deck) return;
+  const big = opts?.big || 'Deck ready';
+  const sub = opts?.sub || '10 slides · numbers + story combined';
   deck.classList.add('pinned', 'combining', 'child');
   const body = deck.querySelector('.body');
   body.innerHTML = '';
   if (!body.querySelector('.work')) buildSurface(body, 'slides');
-  addLine(body, `<div class="big">Deck ready</div>`, 0);
-  addLine(body, `<div class="sub">10 slides · numbers + story combined</div>`, 80);
+  addLine(body, `<div class="big">${big}</div>`, 0);
+  addLine(body, `<div class="sub">${sub}</div>`, 80);
   addLine(body, `<div class="stamp">● saved · v1 · just now</div>`, 160);
+  if (opts?.artifact_url) {
+    addLine(body, `<a class="btn primary" href="${opts.artifact_url}" target="_blank" rel="noopener">Open deck</a>`, 240);
+  }
   deck.querySelector('.st').textContent = 'pinned';
   sfx('ding');
   speak('deck_done');
@@ -1893,6 +1898,10 @@ window.__ZAVORA_UI__ = {
   resetAgents,
   agentActive,
   conductAction,
+  conductFuse,
+  finishDeck,
+  hand,
+  wait,
   legacySubmit: __legacySubmitIntent,
   clearSuggestion() {
     clearTimeout(suggestTimer);

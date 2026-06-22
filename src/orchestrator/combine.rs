@@ -1,0 +1,296 @@
+use std::convert::Infallible;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+
+use adk_core::{Content, UserId, SessionId};
+use adk_runner::Runner;
+use futures::StreamExt;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+
+use crate::events::sse::{to_event, ConductStep, FieldEvent};
+use crate::state::{SessionArtifacts, SessionStore};
+
+fn deck_conduct_steps() -> Vec<ConductStep> {
+    vec![
+        ConductStep {
+            op: "fuse".into(),
+            source: Some("Auto-Excel".into()),
+            target: Some("Auto-Slides".into()),
+            delay_ms: None,
+        },
+        ConductStep {
+            op: "wait".into(),
+            source: None,
+            target: None,
+            delay_ms: Some(500),
+        },
+        ConductStep {
+            op: "fuse".into(),
+            source: Some("Auto-Docs".into()),
+            target: Some("Auto-Slides".into()),
+            delay_ms: None,
+        },
+        ConductStep {
+            op: "wait".into(),
+            source: None,
+            target: None,
+            delay_ms: Some(400),
+        },
+    ]
+}
+
+fn artifact_url(session_id: &str, path: &Path, artifact_root: &Path) -> Option<String> {
+    let rel = path.strip_prefix(artifact_root).ok()?;
+    let rel = rel.to_str()?;
+    Some(format!("/artifacts/{session_id}/{rel}"))
+}
+
+fn parse_saved_path(response: &serde_json::Value) -> Option<PathBuf> {
+    let output = response
+        .get("output")
+        .and_then(|o| o.as_str())
+        .or_else(|| response.get("path").and_then(|p| p.as_str()))
+        .or_else(|| response.get("file_path").and_then(|p| p.as_str()));
+
+    if let Some(s) = output {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(s) {
+            if let Some(p) = parsed
+                .get("path")
+                .or_else(|| parsed.get("file_path"))
+                .or_else(|| parsed.get("output_path"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(PathBuf::from(p));
+            }
+        }
+        let path = PathBuf::from(s);
+        if path.is_absolute() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn parse_slide_count(response: &serde_json::Value) -> Option<u32> {
+    let output = response
+        .get("output")
+        .and_then(|o| o.as_str())
+        .unwrap_or("");
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(output) {
+        if let Some(n) = parsed
+            .get("slide_count")
+            .or_else(|| parsed.get("slides"))
+            .and_then(|v| v.as_u64())
+        {
+            return Some(n as u32);
+        }
+    }
+    for token in output.split_whitespace() {
+        if let Ok(n) = token.parse::<u32>() {
+            if (1..=50).contains(&n) {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+fn find_newest_artifact(dir: &Path, ext: &str) -> Option<PathBuf> {
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some(ext) {
+                if let Ok(meta) = entry.metadata() {
+                    if let Ok(modified) = meta.modified() {
+                        if newest.as_ref().is_none_or(|(t, _)| modified > *t) {
+                            newest = Some((modified, path));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    newest.map(|(_, p)| p)
+}
+
+fn collect_artifacts(dir: &Path) -> SessionArtifacts {
+    SessionArtifacts {
+        xlsx: find_newest_artifact(dir, "xlsx").map(|p| p.display().to_string()),
+        docx: find_newest_artifact(dir, "docx").map(|p| p.display().to_string()),
+        pptx: find_newest_artifact(dir, "pptx").map(|p| p.display().to_string()),
+        combined_pptx: None,
+    }
+}
+
+pub fn stream_combine(
+    runner: Arc<Runner>,
+    user_id: String,
+    session_id: String,
+    intent: String,
+    artifact_root: PathBuf,
+    sessions: SessionStore,
+) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
+    let (tx, rx) = mpsc::channel(64);
+
+    tokio::spawn(async move {
+        let session_dir = artifact_root.join(&session_id);
+
+        let _ = tx
+            .send(Ok(to_event(&FieldEvent::Conduct {
+                steps: deck_conduct_steps(),
+            })))
+            .await;
+
+        let record = sessions.get(&session_id).await;
+        let artifacts = record
+            .map(|r| r.artifacts)
+            .unwrap_or_else(|| collect_artifacts(&session_dir));
+
+        let xlsx = artifacts
+            .xlsx
+            .clone()
+            .or_else(|| find_newest_artifact(&session_dir, "xlsx").map(|p| p.display().to_string()));
+        let docx = artifacts
+            .docx
+            .clone()
+            .or_else(|| find_newest_artifact(&session_dir, "docx").map(|p| p.display().to_string()));
+        let pptx = artifacts
+            .pptx
+            .clone()
+            .or_else(|| find_newest_artifact(&session_dir, "pptx").map(|p| p.display().to_string()));
+
+        if xlsx.is_none() || docx.is_none() || pptx.is_none() {
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::Error {
+                    message: "Missing deck artifacts — run a deck intent first".into(),
+                })))
+                .await;
+            let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+            return;
+        }
+
+        let prompt = format!(
+            "{intent}\n\n\
+             [Save files to: {}/]\n\
+             [Artifacts]\n\
+             pptx: {}\n\
+             [Sibling sources]\n\
+             xlsx: {}\n\
+             docx: {}\n\
+             Merge excel numbers and docs narrative into the slides deck.",
+            session_dir.display(),
+            pptx.as_deref().unwrap_or(""),
+            xlsx.as_deref().unwrap_or(""),
+            docx.as_deref().unwrap_or(""),
+        );
+
+        let content = Content::new("user").with_text(&prompt);
+        let uid = match UserId::try_from(user_id.as_str()) {
+            Ok(u) => u,
+            Err(e) => {
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::Error {
+                        message: e.to_string(),
+                    })))
+                    .await;
+                return;
+            }
+        };
+        let sid = match SessionId::try_from(session_id.as_str()) {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::Error {
+                        message: e.to_string(),
+                    })))
+                    .await;
+                return;
+            }
+        };
+
+        let stream = match runner.run(uid, sid, content).await {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = tx
+                    .send(Ok(to_event(&FieldEvent::Error {
+                        message: e.to_string(),
+                    })))
+                    .await;
+                return;
+            }
+        };
+
+        futures::pin_mut!(stream);
+        let mut slide_count: Option<u32> = None;
+        let mut combined_path: Option<PathBuf> = None;
+
+        while let Some(result) = stream.next().await {
+            let event = match result {
+                Ok(ev) => ev,
+                Err(e) => {
+                    let _ = tx
+                        .send(Ok(to_event(&FieldEvent::Error {
+                            message: e.to_string(),
+                        })))
+                        .await;
+                    break;
+                }
+            };
+
+            if event.author != "combine_agent" {
+                continue;
+            }
+
+            if let Some(content) = event.content() {
+                for part in &content.parts {
+                    if let adk_core::Part::FunctionResponse { function_response, .. } = part {
+                        let tool = function_response.name.as_str();
+                        if tool == "describe_presentation" {
+                            slide_count =
+                                parse_slide_count(&function_response.response).or(slide_count);
+                        }
+                        if tool == "save_presentation" {
+                            combined_path = parse_saved_path(&function_response.response)
+                                .or_else(|| find_newest_artifact(&session_dir, "pptx"));
+                        }
+                    }
+                }
+            }
+        }
+
+        if combined_path.is_none() {
+            combined_path = find_newest_artifact(&session_dir, "pptx");
+        }
+
+        let slide_count = slide_count.unwrap_or(10);
+        let sub = format!("{slide_count} slides · numbers + story combined");
+        let url = combined_path
+            .as_ref()
+            .and_then(|p| artifact_url(&session_id, p, &artifact_root));
+
+        let _ = tx
+            .send(Ok(to_event(&FieldEvent::DeckFinish {
+                big: "Deck ready".into(),
+                sub,
+                artifact_url: url.clone(),
+                slide_count: Some(slide_count),
+            })))
+            .await;
+
+        if let Some(path) = combined_path {
+            let mut updated = collect_artifacts(&session_dir);
+            updated.combined_pptx = Some(path.display().to_string());
+            sessions
+                .update_artifacts(&session_id, updated)
+                .await;
+        }
+
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+    });
+
+    ReceiverStream::new(rx)
+}

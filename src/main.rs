@@ -34,26 +34,27 @@ async fn main() -> anyhow::Result<()> {
 
     let session_service = Arc::new(InMemorySessionService::new());
 
-    let (runner, mcp_pool, deck_enabled) = if config.deck_enabled() {
+    let (deck_runner, combine_runner, mcp_pool, deck_enabled) = if config.deck_enabled() {
         match boot_deck_stack(&config, session_service.clone()).await {
-            Ok((runner, pool)) => {
-                tracing::info!("Deck workflow enabled (MCP + Gemini)");
-                (Some(runner), Some(pool), true)
+            Ok((deck_runner, combine_runner, pool)) => {
+                tracing::info!("Deck + combine workflows enabled (MCP + Gemini)");
+                (Some(deck_runner), Some(combine_runner), Some(pool), true)
             }
             Err(e) => {
                 tracing::warn!("Deck workflow unavailable ({e:#}) — mock scenarios only");
-                (None, None, false)
+                (None, None, None, false)
             }
         }
     } else {
         tracing::warn!("GOOGLE_API_KEY not set — deck uses mock SSE");
-        (None, None, false)
+        (None, None, None, false)
     };
 
     let app_state = AppState::new(
         config.artifact_dir.clone(),
         deck_enabled,
-        runner,
+        deck_runner,
+        combine_runner,
         session_service,
         mcp_pool,
     );
@@ -79,6 +80,14 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/sessions/{session_id}/intent",
             post(routes::intent::submit_intent),
+        )
+        .route(
+            "/api/sessions/{session_id}/action",
+            post(routes::action::submit_action),
+        )
+        .route(
+            "/api/sessions/{session_id}/fuse",
+            post(routes::fuse::fuse_cards),
         )
         .with_state(app_state)
         .merge(awp_router(awp_state))
@@ -117,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
 async fn boot_deck_stack(
     config: &AppConfig,
     session_service: Arc<InMemorySessionService>,
-) -> anyhow::Result<(Arc<Runner>, Arc<McpPool>)> {
+) -> anyhow::Result<(Arc<Runner>, Arc<Runner>, Arc<McpPool>)> {
     let api_key = config
         .google_api_key
         .as_deref()
@@ -139,16 +148,27 @@ async fn boot_deck_stack(
     });
 
     let workflow = deck::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+    let combine_agent =
+        spatial_os::agents::combine::build(api_key, &config.gemini_model, pool.slides.clone())
+            .await?;
 
-    let runner = Arc::new(
+    let deck_runner = Arc::new(
         Runner::builder()
             .app_name("zavora-os")
             .agent(workflow)
+            .session_service(session_service.clone())
+            .build()?,
+    );
+
+    let combine_runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-combine")
+            .agent(combine_agent)
             .session_service(session_service)
             .build()?,
     );
 
-    Ok((runner, pool))
+    Ok((deck_runner, combine_runner, pool))
 }
 
 fn awp_router(state: AwpState) -> Router {

@@ -2,13 +2,12 @@ use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    response::sse::Sse,
     Json,
 };
 use serde::Deserialize;
 
-use crate::events::mock;
-use crate::orchestrator::deck;
+use crate::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+use crate::scenarios;
 use crate::state::{AppState, SessionStore};
 
 #[derive(Deserialize)]
@@ -29,22 +28,12 @@ pub async fn submit_intent(
         return (StatusCode::NOT_FOUND, "session not found").into_response();
     };
 
-    let scenario = mock::pick_scenario(&body.text);
-
-    if scenario == "deck" && state.deck_enabled {
-        if let Some(runner) = state.runner.clone() {
-            return Sse::new(deck::stream_deck(
-                runner,
-                record.user_id,
-                session_id,
-                body.text,
-                state.artifact_dir.clone(),
-            ))
-            .into_response();
-        }
-    }
-
-    Sse::new(mock::stream_intent(&body.text)).into_response()
+    dispatch_intent(IntentDispatch {
+        state: &state,
+        session_id,
+        user_id: record.user_id,
+        text: body.text,
+    })
 }
 
 /// A2A stub that forwards intent text to the same mock orchestrator acknowledgement.
@@ -81,7 +70,7 @@ pub async fn a2a_intent(
     }
 
     let record = sessions.create().await;
-    let scenario = mock::pick_scenario(&intent_text);
+    let scenario = scenarios::pick_scenario(&intent_text);
 
     (
         StatusCode::OK,

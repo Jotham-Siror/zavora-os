@@ -12,6 +12,7 @@ use adk_model::gemini::GeminiModel;
 use futures::StreamExt;
 use spatial_os::config::AppConfig;
 use spatial_os::events::mock;
+use spatial_os::scenarios;
 use spatial_os::tools::mcp;
 
 #[test]
@@ -88,6 +89,49 @@ async fn gemini_31_flash_lite_responds() {
         text.to_uppercase().contains("PONG"),
         "expected PONG in model reply, got: {text}"
     );
+}
+
+#[test]
+fn combine_action_routing_is_live_for_deck() {
+    assert_eq!(scenarios::pick_action("combine"), Some("combine"));
+    assert!(scenarios::action_is_live("combine", Some("deck"), true));
+    assert!(!scenarios::action_is_live("combine", Some("morning"), true));
+    assert!(!scenarios::intent_is_live("morning", true));
+    assert!(scenarios::intent_is_live("deck", true));
+}
+
+#[tokio::test]
+async fn mock_combine_action_stream_completes_with_events() {
+    use std::time::Duration;
+
+    let result = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut stream = mock::stream_action("combine", Some("deck"), "combine");
+        let mut count = 0usize;
+        while let Some(item) = stream.next().await {
+            let _ = item.expect("sse event");
+            count += 1;
+        }
+        count
+    })
+    .await
+    .expect("action stream should finish within 5s");
+
+    assert!(
+        result >= 3,
+        "deck combine mock should emit conduct + deck_finish + done, got {result}"
+    );
+}
+
+#[tokio::test]
+async fn combine_agent_builds_with_configured_model() {
+    let api_key = common::google_api_key();
+    let paths = common::mcp_paths();
+    common::assert_mcp_binaries_exist(&paths);
+
+    let slides = mcp::spawn_mcp_server(&paths.slides).await.expect("slides");
+    spatial_os::agents::combine::build(&api_key, &common::gemini_model(), Arc::new(slides))
+        .await
+        .expect("combine agent should build");
 }
 
 #[tokio::test]

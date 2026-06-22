@@ -4,7 +4,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use super::sse::{to_event, FieldEvent};
+use super::sse::{to_event, ConductStep, FieldEvent};
+use crate::scenarios;
 
 pub fn pick_scenario(text: &str) -> &'static str {
     let t = text.to_lowercase();
@@ -183,6 +184,82 @@ pub fn stream_intent(text: &str) -> ReceiverStream<Result<axum::response::sse::E
                 html: suzy_summary(key).into(),
             })))
             .await;
+        let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+    });
+
+    ReceiverStream::new(rx)
+}
+
+fn deck_conduct_steps() -> Vec<ConductStep> {
+    vec![
+        ConductStep {
+            op: "fuse".into(),
+            source: Some("Auto-Excel".into()),
+            target: Some("Auto-Slides".into()),
+            delay_ms: None,
+        },
+        ConductStep {
+            op: "wait".into(),
+            source: None,
+            target: None,
+            delay_ms: Some(500),
+        },
+        ConductStep {
+            op: "fuse".into(),
+            source: Some("Auto-Docs".into()),
+            target: Some("Auto-Slides".into()),
+            delay_ms: None,
+        },
+        ConductStep {
+            op: "wait".into(),
+            source: None,
+            target: None,
+            delay_ms: Some(400),
+        },
+    ]
+}
+
+pub fn stream_action(
+    action: &str,
+    scenario: Option<&str>,
+    _text: &str,
+) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
+    let (tx, rx) = mpsc::channel(32);
+    let action = action.to_string();
+    let scenario = scenario.map(str::to_string);
+
+    tokio::spawn(async move {
+        let key = scenario.as_deref().unwrap_or("morning");
+
+        if action == "combine" && key == "deck" {
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::Conduct {
+                    steps: deck_conduct_steps(),
+                })))
+                .await;
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::DeckFinish {
+                    big: "Deck ready".into(),
+                    sub: "10 slides · numbers + story combined".into(),
+                    artifact_url: None,
+                    slide_count: Some(10),
+                })))
+                .await;
+        } else if let Some((source, target)) = scenarios::mock_fuse_pair(key) {
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::Conduct {
+                    steps: vec![ConductStep {
+                        op: "fuse".into(),
+                        source: Some(source.into()),
+                        target: Some(target.into()),
+                        delay_ms: None,
+                    }],
+                })))
+                .await;
+            tokio::time::sleep(Duration::from_millis(900)).await;
+        }
+
         let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
     });
 

@@ -1,5 +1,5 @@
 /**
- * Live mode: consume POST /api/sessions/{id}/intent SSE and drive the field UI.
+ * Live mode: consume POST /api/sessions/{id}/intent|action SSE and drive the field UI.
  * Offline demo uses legacy scenarios{} when ?demo=1 or localStorage zavora_demo=1.
  */
 (function () {
@@ -11,6 +11,9 @@
   let sessionId = null;
   let abortController = null;
   const cards = new Map();
+
+  const ACTION_RE =
+    /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care|read aloud|show me|reply to them)\b/i;
 
   async function ensureSession() {
     if (sessionId) return sessionId;
@@ -69,6 +72,26 @@
     entry.card.status.className = 'status' + (status === 'working' ? ' working' : '');
   }
 
+  async function runConductSteps(steps) {
+    if (!steps?.length) return;
+    ui.suzy.classList.remove('show');
+    if (ui.origin?.querySelector('b')) {
+      ui.origin.querySelector('b').textContent = 'performing your request…';
+    }
+    if (ui.hand) ui.hand.classList.add('show');
+
+    for (const step of steps) {
+      if (step.op === 'fuse' && step.source && step.target && ui.conductFuse) {
+        await ui.conductFuse(step.source, step.target).catch(() => {});
+      } else if (step.op === 'wait' && step.delay_ms) {
+        await ui.wait(step.delay_ms);
+      }
+    }
+
+    if (ui.hand) ui.hand.classList.remove('show');
+    if (ui.input) ui.input.placeholder = 'What do you want to do?';
+  }
+
   function handleEvent(ev, intentText) {
     switch (ev.type) {
       case 'scenario':
@@ -115,6 +138,18 @@
         }
         break;
       }
+      case 'conduct':
+        return runConductSteps(ev.steps);
+      case 'deck_finish':
+        if (ui.finishDeck) {
+          ui.finishDeck({
+            big: ev.big,
+            sub: ev.sub,
+            artifact_url: ev.artifact_url,
+            slide_count: ev.slide_count,
+          });
+        }
+        break;
       case 'error':
         console.warn('[zavora] orchestration error', ev.message);
         break;
@@ -126,40 +161,10 @@
       default:
         break;
     }
+    return Promise.resolve();
   }
 
-  async function submitLive(text) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    ui.clearSuggestion();
-    ui.input.value = '';
-
-    const hasCards = !!document.querySelector('.card');
-    const isAction =
-      /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care|read aloud|show me|reply to them)\b/i.test(
-        trimmed
-      );
-    if (hasCards && isAction) {
-      ui.conductAction();
-      return;
-    }
-
-    await ensureSession();
-    if (abortController) abortController.abort();
-    abortController = new AbortController();
-
-    const res = await fetch(`/api/sessions/${sessionId}/intent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify({ text: trimmed }),
-      signal: abortController.signal,
-    });
-    if (!res.ok) throw new Error(`intent failed: ${res.status}`);
-
+  async function consumeSse(res, intentText) {
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -174,12 +179,41 @@
         const line = part.split('\n').find((l) => l.startsWith('data: '));
         if (!line) continue;
         try {
-          handleEvent(JSON.parse(line.slice(6)), trimmed);
+          await handleEvent(JSON.parse(line.slice(6)), intentText);
         } catch (e) {
           console.warn('SSE parse error', e);
         }
       }
     }
+  }
+
+  async function submitLive(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    ui.clearSuggestion();
+    ui.input.value = '';
+
+    const hasCards = !!document.querySelector('.card');
+    const isAction = ACTION_RE.test(trimmed);
+
+    await ensureSession();
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    const endpoint = hasCards && isAction ? 'action' : 'intent';
+    const res = await fetch(`/api/sessions/${sessionId}/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({ text: trimmed }),
+      signal: abortController.signal,
+    });
+    if (!res.ok) throw new Error(`${endpoint} failed: ${res.status}`);
+
+    await consumeSse(res, trimmed);
   }
 
   window.__ZAVORA_LIVE__ = {

@@ -11,6 +11,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
+use crate::state::{SessionArtifacts, SessionStore};
 
 fn deck_cards() -> Vec<serde_json::Value> {
     vec![
@@ -120,12 +121,22 @@ fn find_newest_artifact(dir: &Path, ext: &str) -> Option<PathBuf> {
     newest.map(|(_, p)| p)
 }
 
+fn collect_session_artifacts(dir: &Path) -> SessionArtifacts {
+    SessionArtifacts {
+        xlsx: find_newest_artifact(dir, "xlsx").map(|p| p.display().to_string()),
+        docx: find_newest_artifact(dir, "docx").map(|p| p.display().to_string()),
+        pptx: find_newest_artifact(dir, "pptx").map(|p| p.display().to_string()),
+        combined_pptx: None,
+    }
+}
+
 pub fn stream_deck(
     runner: Arc<Runner>,
     user_id: String,
     session_id: String,
     intent: String,
     artifact_root: PathBuf,
+    sessions: Option<SessionStore>,
 ) -> ReceiverStream<Result<axum::response::sse::Event, Infallible>> {
     let (tx, rx) = mpsc::channel(128);
 
@@ -133,6 +144,10 @@ pub fn stream_deck(
         let session_dir = artifact_root.join(&session_id);
         if tokio::fs::create_dir_all(&session_dir).await.is_err() {
             return;
+        }
+
+        if let Some(ref store) = sessions {
+            store.set_scenario(&session_id, "deck").await;
         }
 
         let cards = deck_cards();
@@ -306,6 +321,12 @@ pub fn stream_deck(
                     .send(Ok(to_event(&FieldEvent::CardResolve { index, resolve })))
                     .await;
             }
+        }
+
+        if let Some(ref store) = sessions {
+            store
+                .update_artifacts(&session_id, collect_session_artifacts(&session_dir))
+                .await;
         }
 
         tokio::time::sleep(Duration::from_millis(400)).await;

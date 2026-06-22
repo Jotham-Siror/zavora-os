@@ -12,8 +12,8 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 | Milestone | Branch | Status | Tag |
 |-----------|--------|--------|-----|
 | M0 Live shell | `milestone/M0-live-shell` | ✅ done | `v0.0.1-m0` |
-| M1 Real deck | `milestone/M1-deck` | 🟡 In progress | `v0.1.0-m1` |
-| M2 Combine | `milestone/M2-combine` | ⬜ | `v0.2.0-m2` |
+| M1 Real deck | `milestone/M1-deck` | ✅ done | `v0.1.0-m1` |
+| M2 Combine | `milestone/M2-combine` | 🟡 In progress | `v0.2.0-m2` |
 | M3 Morning | `milestone/M3-morning` | ⬜ | `v0.3.0-m3` |
 | M4 Persistence | `milestone/M4-persistence` | ⬜ | `v0.4.0-m4` |
 | M5 Suzy + router | `milestone/M5-coordinator` | ⬜ | `v0.5.0-m5` |
@@ -117,13 +117,13 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Tasks
 
-- [ ] **M2-T1** `POST /api/sessions/{sid}/action` — action verb detection
-- [ ] **M2-T2** `combine_agent` — merge excel + docs into `.pptx` via slides-mcp
-- [ ] **M2-T3** SSE `conduct` events — step sequence for hand animation
-- [ ] **M2-T4** `field-client.js` — consume `conduct` events in `conductAction()`
-- [ ] **M2-T5** `finishDeck()` — pinned card + real artifact + `deck_done` audio
-- [ ] **M2-T6** `POST /api/sessions/{sid}/fuse` — generic card fuse
-- [ ] **M2-T7** `business.toml` — `submit_action`, `fuse_cards` capabilities
+- [x] **M2-T1** `POST /api/sessions/{sid}/action` — action verb detection
+- [x] **M2-T2** `combine_agent` — merge excel + docs into `.pptx` via slides-mcp
+- [x] **M2-T3** SSE `conduct` events — step sequence for hand animation
+- [x] **M2-T4** `field-client.js` — consume `conduct` events in `conductAction()`
+- [x] **M2-T5** `finishDeck()` — pinned card + real artifact + `deck_done` audio
+- [x] **M2-T6** `POST /api/sessions/{sid}/fuse` — generic card fuse
+- [x] **M2-T7** `business.toml` — `submit_action`, `fuse_cards` capabilities
 
 ### Validation
 
@@ -134,9 +134,9 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Commits
 
-- [ ] `feat(api): action turn + fuse endpoints`
-- [ ] `feat(agents): combine_agent via slides-mcp`
-- [ ] `feat(ui): server-driven conducting`
+- [x] `feat(api): action turn + fuse endpoints`
+- [x] `feat(agents): combine_agent via slides-mcp`
+- [x] `feat(ui): server-driven conducting`
 
 ---
 

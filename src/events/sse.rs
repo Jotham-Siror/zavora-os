@@ -35,7 +35,27 @@ pub enum FieldEvent {
         key: String,
         html: String,
     },
+    Conduct {
+        steps: Vec<ConductStep>,
+    },
+    DeckFinish {
+        big: String,
+        sub: String,
+        artifact_url: Option<String>,
+        slide_count: Option<u32>,
+    },
     Done,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConductStep {
+    pub op: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delay_ms: Option<u64>,
 }
 
 pub fn to_event(ev: &FieldEvent) -> Event {
