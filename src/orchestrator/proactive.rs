@@ -75,6 +75,21 @@ pub fn stream_proactive(
     let cards = proactive_cards();
 
     tokio::spawn(async move {
+        if store.dnd().await {
+            if let Some(ref s) = sessions {
+                s.set_scenario(&session_id, "proactive", Some(&intent)).await;
+            }
+            let _ = tx
+                .send(Ok(to_event(&FieldEvent::SuzySummary {
+                    key: "proactive".into(),
+                    html: "Do not disturb is on — background agents are paused. Turn off DND to see what they found.".into(),
+                    audio_clip: None,
+                })))
+                .await;
+            let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+            return;
+        }
+
         if let Some(ref s) = sessions {
             s.set_scenario(&session_id, "proactive", Some(&intent)).await;
         }

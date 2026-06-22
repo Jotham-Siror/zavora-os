@@ -1,4 +1,5 @@
 pub mod action;
+pub mod ambient;
 pub mod agents;
 pub mod cards;
 pub mod commit;

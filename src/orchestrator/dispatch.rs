@@ -8,7 +8,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::agents::router::{self, ClassifyOutcome};
 use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
-use crate::orchestrator::{combine, deck, lisbon, live, morning, people, week};
+use crate::orchestrator::{combine, deck, lisbon, live, morning, people, proactive, week};
 use crate::scenarios;
 use crate::scenarios::tour;
 use crate::state::AppState;
@@ -197,6 +197,18 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                     ))
                     .into_response();
                 }
+            }
+            "proactive" => {
+                return Sse::new(proactive::stream_proactive(
+                    None,
+                    req.user_id,
+                    req.session_id,
+                    req.text,
+                    req.state.ambient.clone(),
+                    sessions,
+                    suzy,
+                ))
+                .into_response();
             }
             _ => {}
         }

@@ -1454,11 +1454,41 @@ const proactiveAgents = [
   { glyph:'🎨', name:'Maker',    tasks:['making something you like','drafting a playlist','sketching ideas'] },
 ];
 const proactiveEl = document.getElementById('agentsProactive');
-proactiveEl.innerHTML = proactiveAgents.map((a,i) => `
-  <div class="tile proactive" data-i="${i}">
+function renderProactiveTile(a) {
+  const working = a.status === 'working';
+  return `<div class="tile proactive" data-id="${a.id}">
     <div class="av">${a.glyph}</div>
-    <div class="who">${a.name}<small>${a.tasks[0]}</small></div>
-  </div>`).join('');
+    <div class="who">${a.name}<small>${a.task || a.tasks?.[0] || ''}</small></div>
+    ${working ? '<span class="live"></span>' : ''}</div>`;
+}
+function applyProactiveAgents(agents) {
+  proactiveEl.innerHTML = agents.map(renderProactiveTile).join('');
+}
+applyProactiveAgents(proactiveAgents.map((a, i) => ({
+  id: ['research','scout','maker'][i], glyph: a.glyph, name: a.name, task: a.tasks[0], status: 'idle',
+})));
+if (!window.__ZAVORA_DEMO__) {
+  fetch('/api/ambient/status').then(r => r.ok ? r.json() : null).then(data => {
+    if (!data?.agents?.length) return;
+    applyProactiveAgents(data.agents);
+  }).catch(() => {});
+  try {
+    const ambientEs = new EventSource('/api/ambient');
+    ambientEs.onmessage = (e) => {
+      if (!e.data || e.data.startsWith(':')) return;
+      let ev; try { ev = JSON.parse(e.data); } catch { return; }
+      if (ev.type === 'snapshot' && ev.agents) applyProactiveAgents(ev.agents);
+      else if (ev.type === 'update' && ev.agent) {
+        const tiles = [...proactiveEl.querySelectorAll('.tile.proactive')];
+        const idx = tiles.findIndex(t => t.dataset.id === ev.agent.id);
+        const html = renderProactiveTile(ev.agent);
+        if (idx >= 0) tiles[idx].outerHTML = html;
+        else proactiveEl.insertAdjacentHTML('beforeend', html);
+      }
+    };
+    ambientEs.onerror = () => { /* keepalive / reconnect handled by browser */ };
+  } catch (_) {}
+}
 
 // ---------- Live: swipeable source feed (CNN · Bloomberg · X · Instagram) ----------
 const sources = [

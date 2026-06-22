@@ -49,6 +49,7 @@ pub struct ScenarioLiveFlags {
     pub people: bool,
     pub week: bool,
     pub lisbon: bool,
+    pub proactive: bool,
 }
 
 /// Whether an intent scenario should use the live orchestrator.
@@ -60,6 +61,7 @@ pub fn intent_is_live(scenario: &str, flags: ScenarioLiveFlags) -> bool {
         "people" => flags.people,
         "week" => flags.week,
         "lisbon" => flags.lisbon,
+        "proactive" => flags.proactive,
         _ => false,
     }
 }
@@ -120,5 +122,15 @@ mod tests {
                 ..Default::default()
             }
         ));
+    }
+
+    #[test]
+    fn proactive_intent_is_live_when_enabled() {
+        let flags = ScenarioLiveFlags {
+            proactive: true,
+            ..Default::default()
+        };
+        assert!(intent_is_live("proactive", flags));
+        assert!(!intent_is_live("proactive", ScenarioLiveFlags::default()));
     }
 }

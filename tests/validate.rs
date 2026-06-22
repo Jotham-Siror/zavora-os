@@ -284,6 +284,57 @@ async fn combine_agent_builds_with_configured_model() {
 }
 
 #[tokio::test]
+async fn ambient_store_tracks_agent_lifecycle() {
+    use spatial_os::ambient::AmbientStore;
+
+    let store = AmbientStore::new();
+    store.set_working("research", "reading sources").await;
+    let rec = store.get("research").await.expect("research agent");
+    assert_eq!(rec.status, "working");
+    assert_eq!(rec.task, "reading sources");
+
+    store
+        .set_done(
+            "research",
+            "ABC Corp brief",
+            serde_json::json!({"big": "Brief ready", "sub": "done"}),
+            Some("summary".into()),
+        )
+        .await;
+    let rec = store.get("research").await.expect("research done");
+    assert_eq!(rec.status, "done");
+    assert!(rec.resolve.is_some());
+
+    store.set_dnd(true).await;
+    assert!(store.dnd().await);
+}
+
+#[tokio::test]
+async fn proactive_mock_scenario_has_three_cards() {
+    assert_eq!(mock::pick_scenario("Show me what you found"), "proactive");
+    let types = mock::preview_intent_event_types("Show me what you found", 6).await;
+    assert_eq!(types[0], "scenario");
+    assert!(types.iter().filter(|t| *t == "card_spawn").count() >= 3);
+}
+
+#[tokio::test]
+async fn ambient_agents_build_with_configured_model() {
+    let api_key = common::google_api_key();
+    let paths = common::mcp_paths();
+    let news = Arc::new(mcp::spawn_mcp_server(&paths.news).await.expect("news"));
+
+    spatial_os::agents::ambient::research::build(&api_key, &common::gemini_model(), news.clone())
+        .await
+        .expect("research agent");
+    spatial_os::agents::ambient::scout::build(&api_key, &common::gemini_model(), None)
+        .await
+        .expect("scout agent");
+    spatial_os::agents::ambient::maker::build(&api_key, &common::gemini_model())
+        .await
+        .expect("maker agent");
+}
+
+#[tokio::test]
 async fn deck_agents_build_with_configured_model() {
     let api_key = common::google_api_key();
     let paths = common::mcp_paths();

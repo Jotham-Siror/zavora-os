@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use adk_agent::ambient::{AmbientAgent, CronTrigger, TriggerHandler};
-use adk_awp::{AwpEvent, InMemoryEventSubscriptionService};
+use adk_awp::{AwpEvent, EventSubscriptionService, InMemoryEventSubscriptionService};
 use adk_core::{Content, SessionId, UserId};
 use adk_runner::Runner;
 use adk_session::{CreateRequest, InMemorySessionService, SessionService};
@@ -21,7 +21,7 @@ pub struct AmbientMcpPool {
 }
 
 pub struct AmbientService {
-    store: AmbientStore,
+    _store: AmbientStore,
     _handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -301,7 +301,7 @@ pub async fn boot(
     );
 
     Ok(AmbientService {
-        store,
+        _store: store,
         _handles: handles,
     })
 }

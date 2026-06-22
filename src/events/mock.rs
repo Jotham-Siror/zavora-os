@@ -131,6 +131,17 @@ fn scenario_cards(key: &str) -> &'static str {
            "stream":["Waiting for flights & stay…"],
            "resolve":{"lines":["<b>Fri</b> — arrive, sunset","<b>Sat</b> — Sintra","<b>Sun</b> — fly home"],"actions":["Save plan","Tweak"]}}
         ]"#,
+        "proactive" => r#"[
+          {"glyph":"🔎","title":"Research","agent":"research.agent","delay":0,
+           "stream":["Reading sources on ABC Corp…","Cross-checking claims…"],
+           "resolve":{"big":"Brief ready","sub":"ABC Corp · funding, team, risks","actions":["Open","Save"]}},
+          {"glyph":"🌐","title":"Scout","agent":"scout.agent","delay":250,
+           "stream":["Watching prices for you…"],
+           "resolve":{"big":"Price dropped","sub":"That listing fell 12% overnight","actions":["Buy now","Keep watching"]}},
+          {"glyph":"🎨","title":"Maker","agent":"maker.agent","delay":500,"waitsFor":2,"attention":true,
+           "stream":["Making something you'd like…"],
+           "resolve":{"lines":["<b>•</b> Drafted a weekend playlist","<b>•</b> Sketched 3 logo ideas","<b>•</b> Wrote a trip shortlist"],"actions":["Show me","Discard"]}}
+        ]"#,
         _ => r#"[
           {"glyph":"📊","title":"Auto-Excel","agent":"auto-excel","surface":"excel","delay":0,
            "stream":["Working…"],

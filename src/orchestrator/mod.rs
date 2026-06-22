@@ -6,6 +6,7 @@ pub mod lisbon;
 pub mod live;
 pub mod morning;
 pub mod people;
+pub mod proactive;
 pub mod persist;
 pub mod week;
 pub mod workflow;

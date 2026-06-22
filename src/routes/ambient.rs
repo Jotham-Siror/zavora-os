@@ -6,7 +6,6 @@ use axum::{
     response::sse::{Event, Sse},
     Json,
 };
-use futures::StreamExt;
 use serde::Deserialize;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -60,7 +59,7 @@ pub async fn stream_ambient(
                                 break;
                             }
                         }
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged) => continue,
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(_) => break,
                     }
                 }

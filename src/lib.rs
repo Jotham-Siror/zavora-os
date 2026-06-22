@@ -1,3 +1,4 @@
+pub mod ambient;
 pub mod agents;
 pub mod config;
 pub mod greeting;

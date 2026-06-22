@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use crate::ambient::AmbientStore;
 use crate::agents::live::LiveMcpPool;
 use crate::agents::lisbon::LisbonMcpPool;
 use crate::agents::morning::MorningMcpPool;
@@ -224,6 +225,8 @@ pub struct AppState {
     pub people_mcp: Option<Arc<PeopleMcpPool>>,
     pub week_mcp: Option<Arc<WeekMcpPool>>,
     pub lisbon_mcp: Option<Arc<LisbonMcpPool>>,
+    pub ambient: AmbientStore,
+    pub ambient_enabled: bool,
 }
 
 impl AppState {
@@ -248,6 +251,8 @@ impl AppState {
         people_mcp: Option<Arc<PeopleMcpPool>>,
         week_mcp: Option<Arc<WeekMcpPool>>,
         lisbon_mcp: Option<Arc<LisbonMcpPool>>,
+        ambient: AmbientStore,
+        ambient_enabled: bool,
     ) -> Self {
         Self {
             sessions: SessionStore::new(),
@@ -270,6 +275,8 @@ impl AppState {
             people_mcp,
             week_mcp,
             lisbon_mcp,
+            ambient,
+            ambient_enabled,
         }
     }
 }

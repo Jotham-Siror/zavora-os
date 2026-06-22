@@ -106,6 +106,27 @@ endpoint = "/api/sessions/{session_id}/fuse"
 method = "POST"
 access_level = "known"
 
+[[capabilities]]
+name = "subscribe_proactive"
+description = "Subscribe to AWP webhook events when background agents complete work"
+endpoint = "/awp/events/subscribe"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "stream_ambient"
+description = "SSE stream of proactive agent rail updates (research, scout, maker)"
+endpoint = "/api/ambient"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "ambient_status"
+description = "Snapshot of proactive agent states and DND flag"
+endpoint = "/api/ambient/status"
+method = "GET"
+access_level = "anonymous"
+
 [[policies]]
 name = "privacy"
 description = "Sessions are in-memory only until persistence ships (M4). No tracking beyond the session."

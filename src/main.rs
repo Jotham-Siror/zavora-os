@@ -4,6 +4,7 @@ use spatial_os::agents::lisbon::{self, LisbonMcpPool};
 use spatial_os::agents::morning::{self, MorningMcpPool};
 use spatial_os::agents::people::{self, PeopleMcpPool};
 use spatial_os::agents::week::{self, WeekMcpPool};
+use spatial_os::ambient::{service, AmbientStore};
 use spatial_os::config::AppConfig;
 use spatial_os::routes;
 use spatial_os::scenarios::ScenarioLiveFlags;
@@ -140,6 +141,31 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let event_service = Arc::new(InMemoryEventSubscriptionService::new());
+
+    let ambient_store = AmbientStore::new();
+    let mut ambient_enabled = false;
+    let mut ambient_service = None;
+
+    if config.agents_enabled() {
+        match boot_ambient_stack(
+            &config,
+            ambient_store.clone(),
+            session_service.clone(),
+            event_service.clone(),
+        )
+        .await
+        {
+            Ok((svc, enabled)) => {
+                ambient_enabled = enabled;
+                ambient_service = Some(svc);
+            }
+            Err(e) => {
+                tracing::warn!("Ambient layer unavailable ({e:#}) — proactive uses store defaults");
+            }
+        }
+    }
+
     let scenario_flags = ScenarioLiveFlags {
         deck: deck_enabled,
         morning: morning_enabled,
@@ -147,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
         people: people_enabled,
         week: week_enabled,
         lisbon: lisbon_enabled,
+        proactive: true,
     };
 
     let app_state = AppState::new(
@@ -169,6 +196,8 @@ async fn main() -> anyhow::Result<()> {
         people_mcp,
         week_mcp,
         lisbon_mcp,
+        ambient_store,
+        ambient_enabled,
     );
     let session_store = app_state.sessions.clone();
 
@@ -176,7 +205,6 @@ async fn main() -> anyhow::Result<()> {
     let ctx = loader.load();
     tracing::info!("Loaded business context: {}", ctx.site_name);
 
-    let event_service = Arc::new(InMemoryEventSubscriptionService::new());
     let awp_state = AwpState {
         business_context: loader.context_ref(),
         rate_limiter: Arc::new(InMemoryRateLimiter::new()),
@@ -191,6 +219,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/greeting", get(routes::greeting::get_greeting))
         .route("/api/people", get(routes::people::get_people))
         .route("/api/live", get(routes::live::get_live))
+        .route("/api/ambient", get(routes::ambient::stream_ambient))
+        .route("/api/ambient/status", get(routes::ambient::list_ambient))
+        .route("/api/ambient/dnd", post(routes::ambient::set_dnd))
         .route("/api/oauth/{provider}", get(routes::oauth::oauth_guide))
         .route("/api/sessions", post(routes::session::create_session))
         .route(
@@ -250,6 +281,8 @@ async fn main() -> anyhow::Result<()> {
     } else {
         tracing::warn!("web dir missing at {}", config.web_dir.display());
     }
+
+    let _ambient_service = ambient_service;
 
     let addr = config.addr();
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -495,6 +528,37 @@ async fn boot_week_stack(
             .build()?,
     );
     Ok((runner, pool))
+}
+
+async fn boot_ambient_stack(
+    config: &AppConfig,
+    store: AmbientStore,
+    session_service: Arc<InMemorySessionService>,
+    event_service: Arc<InMemoryEventSubscriptionService>,
+) -> anyhow::Result<(service::AmbientService, bool)> {
+    let news = tools::mcp::spawn_mcp_server(&config.mcp_news_path).await?;
+    let n = tools::mcp::health_check(&news).await?;
+    tracing::info!("Ambient MCP: news={n}");
+
+    let real_estate = tools::mcp::try_spawn_mcp_server(&config.mcp_real_estate_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+
+    let pool = service::AmbientMcpPool {
+        news: Arc::new(news),
+        real_estate,
+    };
+
+    let svc = service::boot(
+        config,
+        &pool,
+        store,
+        session_service,
+        event_service,
+    )
+    .await?;
+
+    Ok((svc, true))
 }
 
 async fn boot_lisbon_stack(
