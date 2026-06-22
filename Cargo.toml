@@ -8,7 +8,7 @@ name = "spatial_os"
 path = "src/lib.rs"
 
 [dependencies]
-adk-agent = { path = "../adk-rust/adk-agent" }
+adk-agent = { path = "../adk-rust/adk-agent", features = ["ambient"] }
 adk-awp = { path = "../adk-rust/adk-awp" }
 adk-core = { path = "../adk-rust/adk-core" }
 adk-model = { path = "../adk-rust/adk-model", features = ["gemini"] }
@@ -29,6 +29,7 @@ tower-http = { version = "0.6", features = ["cors", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 adk-core = { path = "../adk-rust/adk-core" }
