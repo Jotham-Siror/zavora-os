@@ -87,6 +87,39 @@ fn scenario_cards(key: &str) -> &'static str {
            "stream":["Composing your brief…"],
            "resolve":{"lines":["<b>Fri</b> — arrive, sunset at Miradouro","<b>Sat</b> — Sintra day trip","<b>Sun</b> — fly home"],"actions":["Read aloud","Dismiss"]}}
         ]"#,
+        "live" => r#"[
+          {"glyph":"📰","title":"Headlines","agent":"news.agent","delay":0,
+           "stream":["Scanning live sources…"],
+           "resolve":{"big":"3 big stories","sub":"Rates paused · chips rally","actions":["Read aloud","Open"]}},
+          {"glyph":"📈","title":"Markets","agent":"markets.agent","delay":250,
+           "stream":["Checking your watchlist…"],
+           "resolve":{"big":"+0.6% pre-open","sub":"Portfolio +0.8%","actions":["Details","Set alert"]}},
+          {"glyph":"🔴","title":"Now","agent":"live.agent","delay":500,"waitsFor":2,
+           "stream":["Tuning into live events…"],
+           "resolve":{"lines":["<b>•</b> Keynote live","<b>•</b> Local match 1–0"],"actions":["Watch","Dismiss"]}}
+        ]"#,
+        "people" => r#"[
+          {"glyph":"💬","title":"Team","agent":"team.agent","delay":0,
+           "stream":["Catching up channels…"],
+           "resolve":{"big":"3 need replies","sub":"Alex, Priya & #dev-team","actions":["Draft replies","Open"]}},
+          {"glyph":"👤","title":"Priya","agent":"people.agent","delay":250,
+           "stream":["Reviewing 1:1 notes…"],
+           "resolve":{"big":"1:1 at 3pm","sub":"2 open items","actions":["Prep notes","Reschedule"]}},
+          {"glyph":"🤝","title":"Connections","agent":"crm.agent","delay":500,"waitsFor":2,
+           "stream":["Finding reconnects…"],
+           "resolve":{"lines":["<b>•</b> Reconnect: Dana","<b>•</b> Intro to Sam"],"actions":["Send notes","Snooze"]}}
+        ]"#,
+        "week" => r#"[
+          {"glyph":"💸","title":"Money","agent":"finance.agent","delay":0,
+           "stream":["Reconciling accounts…"],
+           "resolve":{"big":"−$1,240","sub":"vs last week","actions":["Breakdown","Set limit"]}},
+          {"glyph":"💪","title":"Health","agent":"health.agent","delay":250,
+           "stream":["Reading sleep data…"],
+           "resolve":{"big":"6.1h avg sleep","sub":"Down 12%","actions":["Tips","Plan rest"]}},
+          {"glyph":"🧠","title":"Focus","agent":"work.agent","delay":500,"waitsFor":2,
+           "stream":["Looking across your week…"],
+           "resolve":{"lines":["<b>•</b> 14 commits shipped"],"actions":["Apply","Ignore"]}}
+        ]"#,
         "lisbon" => r#"[
           {"glyph":"✈️","title":"Flights","agent":"travel.agent","delay":0,
            "stream":["Scanning 40+ carriers for Lisbon…","Comparing price vs. travel time…"],

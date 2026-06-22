@@ -96,9 +96,28 @@ fn combine_action_routing_is_live_for_deck() {
     assert_eq!(scenarios::pick_action("combine"), Some("combine"));
     assert!(scenarios::action_is_live("combine", Some("deck"), true));
     assert!(!scenarios::action_is_live("combine", Some("morning"), true));
-    assert!(!scenarios::intent_is_live("morning", true, false));
-    assert!(scenarios::intent_is_live("deck", true, false));
-    assert!(scenarios::intent_is_live("morning", false, true));
+    use spatial_os::scenarios::ScenarioLiveFlags;
+    assert!(scenarios::intent_is_live(
+        "deck",
+        ScenarioLiveFlags {
+            deck: true,
+            ..Default::default()
+        }
+    ));
+    assert!(scenarios::intent_is_live(
+        "morning",
+        ScenarioLiveFlags {
+            morning: true,
+            ..Default::default()
+        }
+    ));
+    assert!(scenarios::intent_is_live(
+        "live",
+        ScenarioLiveFlags {
+            live: true,
+            ..Default::default()
+        }
+    ));
 }
 
 #[tokio::test]
@@ -146,6 +165,22 @@ async fn router_agent_builds_with_gemini() {
             .await
             .expect("router should build");
     assert_eq!(agent.name(), "intent_router");
+}
+
+#[tokio::test]
+async fn live_workflow_builds_with_news_mcp() {
+    let api_key = common::google_api_key();
+    let paths = common::mcp_paths();
+    let news = mcp::spawn_mcp_server(&paths.news).await.expect("news");
+
+    let pool = spatial_os::agents::live::LiveMcpPool {
+        news: Arc::new(news),
+        market_data: None,
+    };
+
+    spatial_os::agents::live::build_workflow(&api_key, &common::gemini_model(), &pool)
+        .await
+        .expect("live workflow should build");
 }
 
 #[tokio::test]

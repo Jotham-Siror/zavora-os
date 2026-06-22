@@ -9,7 +9,12 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use crate::agents::live::LiveMcpPool;
+use crate::agents::lisbon::LisbonMcpPool;
 use crate::agents::morning::MorningMcpPool;
+use crate::agents::people::PeopleMcpPool;
+use crate::agents::week::WeekMcpPool;
+use crate::scenarios::ScenarioLiveFlags;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SessionArtifacts {
@@ -203,47 +208,68 @@ pub struct AppState {
     pub deck_runner: Option<Arc<Runner>>,
     pub combine_runner: Option<Arc<Runner>>,
     pub morning_runner: Option<Arc<Runner>>,
+    pub live_runner: Option<Arc<Runner>>,
+    pub people_runner: Option<Arc<Runner>>,
+    pub week_runner: Option<Arc<Runner>>,
+    pub lisbon_runner: Option<Arc<Runner>>,
     pub router_runner: Option<Arc<Runner>>,
     pub suzy_runner: Option<Arc<Runner>>,
     pub session_service: Arc<InMemorySessionService>,
     pub artifact_dir: PathBuf,
-    pub deck_enabled: bool,
-    pub morning_enabled: bool,
+    pub scenario_flags: ScenarioLiveFlags,
     pub coordinator_enabled: bool,
     pub deck_mcp: Option<Arc<McpPool>>,
     pub morning_mcp: Option<Arc<MorningMcpPool>>,
+    pub live_mcp: Option<Arc<LiveMcpPool>>,
+    pub people_mcp: Option<Arc<PeopleMcpPool>>,
+    pub week_mcp: Option<Arc<WeekMcpPool>>,
+    pub lisbon_mcp: Option<Arc<LisbonMcpPool>>,
 }
 
 impl AppState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         artifact_dir: PathBuf,
-        deck_enabled: bool,
-        morning_enabled: bool,
+        scenario_flags: ScenarioLiveFlags,
         coordinator_enabled: bool,
         deck_runner: Option<Arc<Runner>>,
         combine_runner: Option<Arc<Runner>>,
         morning_runner: Option<Arc<Runner>>,
+        live_runner: Option<Arc<Runner>>,
+        people_runner: Option<Arc<Runner>>,
+        week_runner: Option<Arc<Runner>>,
+        lisbon_runner: Option<Arc<Runner>>,
         router_runner: Option<Arc<Runner>>,
         suzy_runner: Option<Arc<Runner>>,
         session_service: Arc<InMemorySessionService>,
         deck_mcp: Option<Arc<McpPool>>,
         morning_mcp: Option<Arc<MorningMcpPool>>,
+        live_mcp: Option<Arc<LiveMcpPool>>,
+        people_mcp: Option<Arc<PeopleMcpPool>>,
+        week_mcp: Option<Arc<WeekMcpPool>>,
+        lisbon_mcp: Option<Arc<LisbonMcpPool>>,
     ) -> Self {
         Self {
             sessions: SessionStore::new(),
             deck_runner,
             combine_runner,
             morning_runner,
+            live_runner,
+            people_runner,
+            week_runner,
+            lisbon_runner,
             router_runner,
             suzy_runner,
             session_service,
             artifact_dir,
-            deck_enabled,
-            morning_enabled,
+            scenario_flags,
             coordinator_enabled,
             deck_mcp,
             morning_mcp,
+            live_mcp,
+            people_mcp,
+            week_mcp,
+            lisbon_mcp,
         }
     }
 }

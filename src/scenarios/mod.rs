@@ -41,11 +41,25 @@ pub fn pick_action(text: &str) -> Option<&'static str> {
     None
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ScenarioLiveFlags {
+    pub deck: bool,
+    pub morning: bool,
+    pub live: bool,
+    pub people: bool,
+    pub week: bool,
+    pub lisbon: bool,
+}
+
 /// Whether an intent scenario should use the live orchestrator.
-pub fn intent_is_live(scenario: &str, deck_enabled: bool, morning_enabled: bool) -> bool {
+pub fn intent_is_live(scenario: &str, flags: ScenarioLiveFlags) -> bool {
     match scenario {
-        "deck" => deck_enabled,
-        "morning" => morning_enabled,
+        "deck" => flags.deck,
+        "morning" => flags.morning,
+        "live" => flags.live,
+        "people" => flags.people,
+        "week" => flags.week,
+        "lisbon" => flags.lisbon,
         _ => false,
     }
 }
@@ -93,8 +107,18 @@ mod tests {
 
     #[test]
     fn morning_intent_is_live_when_enabled() {
-        assert!(intent_is_live("morning", false, true));
-        assert!(!intent_is_live("morning", false, false));
-        assert!(intent_is_live("deck", true, false));
+        let flags = ScenarioLiveFlags {
+            morning: true,
+            ..Default::default()
+        };
+        assert!(intent_is_live("morning", flags));
+        assert!(!intent_is_live("morning", ScenarioLiveFlags::default()));
+        assert!(intent_is_live(
+            "deck",
+            ScenarioLiveFlags {
+                deck: true,
+                ..Default::default()
+            }
+        ));
     }
 }

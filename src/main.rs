@@ -1,7 +1,12 @@
 use spatial_os::agents::deck::{self, McpPool};
+use spatial_os::agents::live::{self, LiveMcpPool};
+use spatial_os::agents::lisbon::{self, LisbonMcpPool};
 use spatial_os::agents::morning::{self, MorningMcpPool};
+use spatial_os::agents::people::{self, PeopleMcpPool};
+use spatial_os::agents::week::{self, WeekMcpPool};
 use spatial_os::config::AppConfig;
 use spatial_os::routes;
+use spatial_os::scenarios::ScenarioLiveFlags;
 use spatial_os::state::AppState;
 use spatial_os::tools;
 
@@ -75,6 +80,49 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let mut live_runner = None;
+    let mut live_mcp = None;
+    let mut live_enabled = false;
+
+    let mut people_runner = None;
+    let mut people_mcp = None;
+    let mut people_enabled = false;
+
+    let mut week_runner = None;
+    let mut week_mcp = None;
+    let mut week_enabled = false;
+
+    let mut lisbon_runner = None;
+    let mut lisbon_mcp = None;
+    let mut lisbon_enabled = false;
+
+    if config.agents_enabled() {
+        if let Ok((runner, pool)) = boot_live_stack(&config, session_service.clone()).await {
+            tracing::info!("Live workflow enabled (mcp-news)");
+            live_runner = Some(runner);
+            live_mcp = Some(pool);
+            live_enabled = true;
+        }
+        if let Ok((runner, pool)) = boot_people_stack(&config, session_service.clone()).await {
+            tracing::info!("People workflow enabled");
+            people_runner = Some(runner);
+            people_mcp = Some(pool);
+            people_enabled = true;
+        }
+        if let Ok((runner, pool)) = boot_week_stack(&config, session_service.clone()).await {
+            tracing::info!("Week workflow enabled");
+            week_runner = Some(runner);
+            week_mcp = Some(pool);
+            week_enabled = true;
+        }
+        if let Ok((runner, pool)) = boot_lisbon_stack(&config, session_service.clone()).await {
+            tracing::info!("Lisbon workflow enabled (weather + itinerary)");
+            lisbon_runner = Some(runner);
+            lisbon_mcp = Some(pool);
+            lisbon_enabled = true;
+        }
+    }
+
     let mut router_runner = None;
     let mut suzy_runner = None;
     let coordinator_enabled = config.agents_enabled();
@@ -92,19 +140,35 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let scenario_flags = ScenarioLiveFlags {
+        deck: deck_enabled,
+        morning: morning_enabled,
+        live: live_enabled,
+        people: people_enabled,
+        week: week_enabled,
+        lisbon: lisbon_enabled,
+    };
+
     let app_state = AppState::new(
         config.artifact_dir.clone(),
-        deck_enabled,
-        morning_enabled,
+        scenario_flags,
         coordinator_enabled,
         deck_runner,
         combine_runner,
         morning_runner,
+        live_runner,
+        people_runner,
+        week_runner,
+        lisbon_runner,
         router_runner,
         suzy_runner,
         session_service,
         deck_mcp,
         morning_mcp,
+        live_mcp,
+        people_mcp,
+        week_mcp,
+        lisbon_mcp,
     );
     let session_store = app_state.sessions.clone();
 
@@ -125,6 +189,8 @@ async fn main() -> anyhow::Result<()> {
     let api = Router::new()
         .route("/health", get(routes::health::health))
         .route("/api/greeting", get(routes::greeting::get_greeting))
+        .route("/api/people", get(routes::people::get_people))
+        .route("/api/live", get(routes::live::get_live))
         .route("/api/oauth/{provider}", get(routes::oauth::oauth_guide))
         .route("/api/sessions", post(routes::session::create_session))
         .route(
@@ -326,6 +392,146 @@ async fn boot_coordinator_stack(
     );
 
     Ok((router_runner, suzy_runner))
+}
+
+async fn boot_live_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<LiveMcpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let news = tools::mcp::spawn_mcp_server(&config.mcp_news_path).await?;
+    let n = tools::mcp::health_check(&news).await?;
+    tracing::info!("Live MCP: news={n}");
+
+    let market_data = tools::mcp::try_spawn_mcp_server(&config.mcp_market_data_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+
+    let pool = Arc::new(LiveMcpPool {
+        news: Arc::new(news),
+        market_data,
+    });
+
+    let workflow = live::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-live")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+    Ok((runner, pool))
+}
+
+async fn boot_people_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<PeopleMcpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let slack = tools::mcp::try_spawn_mcp_server(&config.mcp_slack_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+    let crm = tools::mcp::try_spawn_mcp_server(&config.mcp_crm_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+    let calendar = tools::mcp::try_spawn_mcp_server(&config.mcp_calendar_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+
+    let pool = Arc::new(PeopleMcpPool {
+        slack,
+        crm,
+        calendar,
+    });
+
+    let workflow = people::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-people")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+    Ok((runner, pool))
+}
+
+async fn boot_week_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<WeekMcpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let banking = tools::mcp::try_spawn_mcp_server(&config.mcp_banking_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+    let github = tools::mcp::try_spawn_mcp_server(&config.mcp_github_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+
+    let pool = Arc::new(WeekMcpPool {
+        banking,
+        github,
+        health_csv: week::health_csv_from_env(&manifest_dir),
+    });
+
+    let workflow = week::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-week")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+    Ok((runner, pool))
+}
+
+async fn boot_lisbon_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<LisbonMcpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let weather = tools::mcp::spawn_mcp_server(&config.mcp_weather_path).await?;
+    let w = tools::mcp::health_check(&weather).await?;
+    tracing::info!("Lisbon MCP: weather={w}");
+
+    let maps = tools::mcp::try_spawn_mcp_server(&config.mcp_maps_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+    let real_estate = tools::mcp::try_spawn_mcp_server(&config.mcp_real_estate_path)
+        .await
+        .map(|t| Arc::new(t) as Arc<dyn adk_core::Toolset>);
+
+    let pool = Arc::new(LisbonMcpPool {
+        maps,
+        weather: Arc::new(weather),
+        real_estate,
+    });
+
+    let workflow = lisbon::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-lisbon")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+    Ok((runner, pool))
 }
 
 fn awp_router(state: AwpState) -> Router {

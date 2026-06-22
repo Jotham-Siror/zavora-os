@@ -18,6 +18,13 @@ pub struct AppConfig {
     pub mcp_email_path: PathBuf,
     pub mcp_news_path: PathBuf,
     pub mcp_weather_path: PathBuf,
+    pub mcp_market_data_path: PathBuf,
+    pub mcp_slack_path: PathBuf,
+    pub mcp_crm_path: PathBuf,
+    pub mcp_banking_path: PathBuf,
+    pub mcp_github_path: PathBuf,
+    pub mcp_maps_path: PathBuf,
+    pub mcp_real_estate_path: PathBuf,
     pub google_api_key: Option<String>,
     pub gemini_model: String,
 }
@@ -74,6 +81,41 @@ impl AppConfig {
                 &manifest_dir,
                 "MCP_WEATHER_PATH",
                 "../mcp-servers/mcp-weather/target/release/mcp-weather",
+            ),
+            mcp_market_data_path: resolve_path(
+                &manifest_dir,
+                "MCP_MARKET_DATA_PATH",
+                "../mcp-servers/mcp-market-data/target/release/mcp-market-data",
+            ),
+            mcp_slack_path: resolve_path(
+                &manifest_dir,
+                "MCP_SLACK_PATH",
+                "../mcp-servers/mcp-slack/target/release/mcp-slack",
+            ),
+            mcp_crm_path: resolve_path(
+                &manifest_dir,
+                "MCP_CRM_PATH",
+                "../mcp-servers/mcp-crm/target/release/mcp-crm",
+            ),
+            mcp_banking_path: resolve_path(
+                &manifest_dir,
+                "MCP_BANKING_PATH",
+                "../mcp-servers/mcp-banking/target/release/mcp-banking",
+            ),
+            mcp_github_path: resolve_path(
+                &manifest_dir,
+                "MCP_GITHUB_PATH",
+                "../mcp-servers/mcp-github/target/release/mcp-github",
+            ),
+            mcp_maps_path: resolve_path(
+                &manifest_dir,
+                "MCP_MAPS_PATH",
+                "../mcp-servers/mcp-maps/target/release/mcp-maps",
+            ),
+            mcp_real_estate_path: resolve_path(
+                &manifest_dir,
+                "MCP_REAL_ESTATE_PATH",
+                "../mcp-servers/mcp-real-estate/target/release/mcp-real-estate",
             ),
             google_api_key: std::env::var("GOOGLE_API_KEY").ok().filter(|k| !k.is_empty()),
             gemini_model: std::env::var("GEMINI_MODEL")

@@ -6,5 +6,7 @@ pub mod fuse;
 pub mod greeting;
 pub mod health;
 pub mod intent;
+pub mod live;
 pub mod oauth;
+pub mod people;
 pub mod session;

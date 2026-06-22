@@ -1428,6 +1428,24 @@ function renderPeople(){
   document.getElementById('peopleFamily').innerHTML = people.family.map(row).join('');
 }
 renderPeople();
+if (!window.__ZAVORA_DEMO__) {
+  fetch('/api/people').then(r => r.ok ? r.json() : null).then(data => {
+    if (!data?.work) return;
+    const row = (a) => `<div class="tile"><div class="av">${a[0].length>2?'#':''}${a[0].slice(0,2)}</div>
+      <div class="who">${a[1]}<small>${a[2]}</small></div>${a[3]?'<span class="live"></span>':''}</div>`;
+    document.getElementById('peopleWork').innerHTML = data.work.map(row).join('');
+    document.getElementById('peopleFamily').innerHTML = data.family.map(row).join('');
+  }).catch(() => {});
+  fetch('/api/live').then(r => r.ok ? r.json() : null).then(data => {
+    if (!data?.slides?.length || !lfTrack) return;
+    lfTrack.innerHTML = data.slides.map(s => `
+      <div class="lf-slide ${s.cls||''}">
+        <div class="lf-top"><span class="lf-logo">${s.logo}</span><span class="lf-name">${s.name}</span><span class="lf-when">${s.when}</span></div>
+        <div class="lf-body">${s.body}</div><div class="lf-meta">${s.meta}</div>
+      </div>`).join('');
+    lfDots.innerHTML = data.slides.map((_,i) => `<i class="${i===0?'on':''}"></i>`).join('');
+  }).catch(() => {});
+}
 
 // ---------- Proactive agents: working in the background on their own ----------
 const proactiveAgents = [
