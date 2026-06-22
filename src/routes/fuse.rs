@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     response::sse::Sse,
     Json,
@@ -22,11 +22,21 @@ pub struct FuseRequest {
 
 pub async fn fuse_cards(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(session_id): Path<String>,
     Json(body): Json<FuseRequest>,
 ) -> Response {
     if body.source.trim().is_empty() || body.target.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "source and target required").into_response();
+    }
+
+    let client_key = format!("fuse:{session_id}");
+    if let Err(resp) = state
+        .awp
+        .check(&headers, &client_key, "fuse_cards")
+        .await
+    {
+        return resp;
     }
 
     let Some(_record) = state.sessions.get(&session_id).await else {

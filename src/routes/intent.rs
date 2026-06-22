@@ -1,6 +1,6 @@
 use axum::{
     extract::{Extension, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -17,11 +17,21 @@ pub struct IntentRequest {
 
 pub async fn submit_intent(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(session_id): Path<String>,
     Json(body): Json<IntentRequest>,
 ) -> Response {
     if body.text.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "intent text required").into_response();
+    }
+
+    let client_key = format!("intent:{session_id}");
+    if let Err(resp) = state
+        .awp
+        .check(&headers, &client_key, "submit_intent")
+        .await
+    {
+        return resp;
     }
 
     let Some(record) = state.sessions.get(&session_id).await else {

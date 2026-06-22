@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -17,11 +17,21 @@ pub struct ActionRequest {
 
 pub async fn submit_action(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(session_id): Path<String>,
     Json(body): Json<ActionRequest>,
 ) -> Response {
     if body.text.trim().is_empty() {
         return (StatusCode::BAD_REQUEST, "action text required").into_response();
+    }
+
+    let client_key = format!("action:{session_id}");
+    if let Err(resp) = state
+        .awp
+        .check(&headers, &client_key, "submit_action")
+        .await
+    {
+        return resp;
     }
 
     let Some(record) = state.sessions.get(&session_id).await else {

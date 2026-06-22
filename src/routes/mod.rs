@@ -1,5 +1,6 @@
 pub mod action;
 pub mod artifacts;
+pub mod awp;
 pub mod ambient;
 pub mod background;
 pub mod agents;

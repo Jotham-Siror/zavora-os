@@ -10,6 +10,8 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use adk_awp::InMemoryEventSubscriptionService;
+
 use crate::ambient::AmbientStore;
 use crate::agents::live::LiveMcpPool;
 use crate::agents::lisbon::LisbonMcpPool;
@@ -338,6 +340,8 @@ pub struct AppState {
     pub suzy_runner: Option<Arc<Runner>>,
     pub session_service: SharedSessionService,
     pub auth: Option<Arc<crate::auth::AuthState>>,
+    pub awp: Arc<crate::awp_gate::AwpGate>,
+    pub event_service: Arc<InMemoryEventSubscriptionService>,
     pub artifact_dir: PathBuf,
     pub scenario_flags: ScenarioLiveFlags,
     pub coordinator_enabled: bool,
@@ -372,6 +376,8 @@ impl AppState {
         suzy_runner: Option<Arc<Runner>>,
         session_service: SharedSessionService,
         auth: Option<Arc<crate::auth::AuthState>>,
+        awp: Arc<crate::awp_gate::AwpGate>,
+        event_service: Arc<InMemoryEventSubscriptionService>,
         deck_mcp: Option<Arc<McpPool>>,
         morning_mcp: Option<Arc<MorningMcpPool>>,
         live_mcp: Option<Arc<LiveMcpPool>>,
@@ -397,6 +403,8 @@ impl AppState {
             suzy_runner,
             session_service,
             auth,
+            awp,
+            event_service,
             artifact_dir,
             scenario_flags,
             coordinator_enabled,

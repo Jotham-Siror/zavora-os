@@ -9,6 +9,7 @@ use spatial_os::auth::{self, AuthState};
 use spatial_os::config::AppConfig;
 use spatial_os::db;
 use spatial_os::pg_session::PgSessionService;
+use spatial_os::awp_gate::AwpGate;
 use spatial_os::routes;
 use spatial_os::scenarios::ScenarioLiveFlags;
 use spatial_os::state::{AppState, SessionStore, SharedSessionService};
@@ -19,8 +20,7 @@ use std::sync::Arc;
 
 use adk_awp::{
     handlers, middleware::version_negotiation, AwpState, BusinessContextLoader,
-    DefaultTrustAssigner, HealthStateMachine, InMemoryConsentService,
-    InMemoryEventSubscriptionService, InMemoryRateLimiter,
+    HealthStateMachine, InMemoryConsentService, InMemoryEventSubscriptionService,
 };
 use adk_runner::Runner;
 use adk_session::{CreateRequest, InMemorySessionService, SessionService};
@@ -204,6 +204,11 @@ async fn main() -> anyhow::Result<()> {
         proactive: true,
     };
 
+    let awp = Arc::new(AwpGate::new(
+        config.jwt_secret.clone(),
+        loader.context_ref(),
+    ));
+
     let app_state = AppState::new(
         session_store,
         config.artifact_dir.clone(),
@@ -220,6 +225,8 @@ async fn main() -> anyhow::Result<()> {
         suzy_runner,
         session_service,
         auth_state.clone(),
+        awp.clone(),
+        event_service.clone(),
         deck_mcp,
         morning_mcp,
         live_mcp,
@@ -236,11 +243,11 @@ async fn main() -> anyhow::Result<()> {
 
     let awp_state = AwpState {
         business_context: loader.context_ref(),
-        rate_limiter: Arc::new(InMemoryRateLimiter::new()),
+        rate_limiter: awp.rate_limiter.clone(),
         consent_service: Arc::new(InMemoryConsentService::new()),
         event_service: event_service.clone(),
         health: Arc::new(HealthStateMachine::new(event_service)),
-        trust_assigner: Arc::new(DefaultTrustAssigner),
+        trust_assigner: awp.trust_assigner.clone(),
     };
 
     let api = Router::new()
@@ -310,6 +317,7 @@ async fn main() -> anyhow::Result<()> {
             "/artifacts/{session_id}/{filename}",
             get(routes::artifacts::get_legacy),
         )
+        .route("/awp/events/subscribe", post(routes::awp::subscribe))
         .with_state(app_state)
         .merge(awp_router(awp_state))
         .layer(CorsLayer::very_permissive());
@@ -726,7 +734,6 @@ fn awp_router(state: AwpState) -> Router {
         .route("/.well-known/awp.json", get(handlers::discovery))
         .route("/awp/manifest", get(handlers::manifest))
         .route("/awp/health", get(handlers::health))
-        .route("/awp/events/subscribe", post(handlers::subscribe))
         .route("/awp/events/subscriptions", get(handlers::list_subscriptions))
         .route(
             "/awp/events/subscriptions/{id}",

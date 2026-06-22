@@ -307,6 +307,75 @@ async fn greeting_agent_builds_with_gemini() {
         .expect("greeting agent should build");
 }
 
+fn awp_gate_fixture() -> spatial_os::awp_gate::AwpGate {
+    use adk_awp::BusinessContextLoader;
+
+    let path = common::manifest_dir().join("business.toml");
+    let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
+    spatial_os::awp_gate::AwpGate::new(Some("validate-jwt-secret".into()), loader.context_ref())
+}
+
+#[tokio::test]
+async fn awp_gate_allows_anonymous_intent() {
+    use axum::http::HeaderMap;
+
+    let gate = awp_gate_fixture();
+    let headers = HeaderMap::new();
+    let trust = gate
+        .check(&headers, "intent:sess-1", "submit_intent")
+        .await
+        .expect("anonymous intent should pass");
+    assert_eq!(trust, awp_types::TrustLevel::Anonymous);
+}
+
+#[tokio::test]
+async fn awp_gate_blocks_anonymous_action() {
+    use axum::http::HeaderMap;
+
+    let gate = awp_gate_fixture();
+    let headers = HeaderMap::new();
+    let err = gate
+        .check(&headers, "action:sess-1", "submit_action")
+        .await
+        .expect_err("anonymous action should be forbidden");
+    assert_eq!(err.status(), axum::http::StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn awp_gate_jwt_bearer_unlocks_known_capabilities() {
+    use axum::http::HeaderMap;
+    use spatial_os::auth;
+
+    let secret = "validate-jwt-secret";
+    let gate = awp_gate_fixture();
+    let token = auth::create_token(uuid::Uuid::new_v4(), secret).expect("jwt");
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        axum::http::header::AUTHORIZATION,
+        format!("Bearer {token}").parse().unwrap(),
+    );
+
+    let trust = gate
+        .check(&headers, "action:sess-1", "submit_action")
+        .await
+        .expect("known caller should pass submit_action");
+    assert_eq!(trust, awp_types::TrustLevel::Known);
+}
+
+#[tokio::test]
+async fn awp_gate_blocks_anonymous_subscribe() {
+    use axum::http::HeaderMap;
+
+    let gate = awp_gate_fixture();
+    let headers = HeaderMap::new();
+    let err = gate
+        .check(&headers, "awp-subscribe", "subscribe_proactive")
+        .await
+        .expect_err("anonymous subscribe should be forbidden");
+    assert_eq!(err.status(), axum::http::StatusCode::FORBIDDEN);
+}
+
 #[tokio::test]
 async fn session_store_create_for_user() {
     let store = spatial_os::state::SessionStore::new();

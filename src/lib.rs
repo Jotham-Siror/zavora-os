@@ -2,6 +2,7 @@ pub mod ambient;
 pub mod agents;
 pub mod artifacts;
 pub mod auth;
+pub mod awp_gate;
 pub mod config;
 pub mod db;
 pub mod pg_session;
