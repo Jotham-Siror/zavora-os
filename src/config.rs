@@ -142,7 +142,7 @@ impl AppConfig {
             gemini_model: std::env::var("GEMINI_MODEL")
                 .unwrap_or_else(|_| "gemini-3.1-flash-lite".into()),
             gemini_live_model: std::env::var("GEMINI_LIVE_MODEL").unwrap_or_else(|_| {
-                "models/gemini-2.5-flash-live-preview".into()
+                "models/gemini-live-2.5-flash-native-audio".into()
             }),
             voice_name: std::env::var("VOICE_NAME").unwrap_or_else(|_| "Aoede".into()),
             database_url: std::env::var("DATABASE_URL").ok().filter(|s| !s.is_empty()),

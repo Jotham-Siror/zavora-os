@@ -357,6 +357,24 @@ fn voice_state_boots_when_api_key_present() {
 }
 
 #[test]
+fn business_toml_lists_voice_capabilities() {
+    use adk_awp::BusinessContextLoader;
+
+    let path = common::manifest_dir().join("business.toml");
+    let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
+    let ctx = loader.load();
+    let caps = &ctx.capabilities;
+    let names: Vec<&str> = caps.iter().map(|c| c.name.as_str()).collect();
+    assert!(names.contains(&"stream_voice"), "missing stream_voice capability");
+    assert!(names.contains(&"voice_status"), "missing voice_status capability");
+
+    let stream = caps.iter().find(|c| c.name == "stream_voice").expect("stream_voice");
+    assert_eq!(stream.endpoint, "/ws/voice");
+    let status = caps.iter().find(|c| c.name == "voice_status").expect("voice_status");
+    assert_eq!(status.endpoint, "/api/voice/status");
+}
+
+#[test]
 fn mcp_allowlist_catalog_covers_deck_agents() {
     let path = common::manifest_dir().join("mcp_allowlists.toml");
     let catalog = spatial_os::tools::allowlist::AllowlistCatalog::from_file(&path)
