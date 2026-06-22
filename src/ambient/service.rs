@@ -6,7 +6,7 @@ use adk_agent::ambient::{AmbientAgent, CronTrigger, TriggerHandler};
 use adk_awp::{AwpEvent, EventSubscriptionService, InMemoryEventSubscriptionService};
 use adk_core::{Content, SessionId, UserId};
 use adk_runner::Runner;
-use adk_session::{CreateRequest, SessionService};
+use adk_session::CreateRequest;
 use crate::state::SharedSessionService;
 use chrono::Utc;
 use futures::{stream, StreamExt};

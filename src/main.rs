@@ -24,7 +24,7 @@ use adk_awp::{
     HealthStateMachine, InMemoryConsentService, InMemoryEventSubscriptionService,
 };
 use adk_runner::Runner;
-use adk_session::{CreateRequest, InMemorySessionService, SessionService};
+use adk_session::{CreateRequest, InMemorySessionService};
 use axum::middleware::from_fn;
 use axum::routing::{delete, get, post};
 use axum::{Extension, Router};

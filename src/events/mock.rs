@@ -219,10 +219,7 @@ pub fn stream_intent_with_scenario(
                 .get("waitsFor")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as usize;
-            if waits_for > 0 {
-                while resolved < waits_for {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
+            if waits_for > 0 && resolved >= waits_for {
                 let _ = tx
                     .send(Ok(to_event(&FieldEvent::CardStatus {
                         index,

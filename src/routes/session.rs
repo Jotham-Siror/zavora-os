@@ -1,7 +1,7 @@
 use axum::{extract::State, http::HeaderMap, Json};
 use serde::Serialize;
 
-use adk_session::{CreateRequest, SessionService};
+use adk_session::CreateRequest;
 
 use crate::auth;
 use crate::state::AppState;
