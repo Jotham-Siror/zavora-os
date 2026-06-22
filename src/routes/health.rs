@@ -5,6 +5,6 @@ pub async fn health() -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
         "service": "zavora-os",
-        "milestone": "M1"
+        "milestone": "M3"
     }))
 }
