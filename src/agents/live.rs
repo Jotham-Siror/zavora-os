@@ -13,28 +13,13 @@ pub struct LiveMcpPool {
     pub market_data: Option<Arc<dyn adk_core::Toolset>>,
 }
 
-const HEADLINES_TOOLS: &[&str] = &[
-    "gnews_top_headlines",
-    "search_news",
-    "get_country_news",
-    "get_trending_topics",
-];
-
-const MARKETS_TOOLS: &[&str] = &["yfinance_chart", "get_trending_topics"];
-
-const NOW_TOOLS: &[&str] = &[
-    "gnews_top_headlines",
-    "get_trending_topics",
-    "search_news",
-];
-
 async fn headlines_agent(
     api_key: &str,
     model_name: &str,
     news: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(news), HEADLINES_TOOLS);
+    let tools = gemini::filtered_for_agent("headlines_agent", news);
     let agent = LlmAgentBuilder::new("headlines_agent")
         .description("Live headlines card")
         .model(model)
@@ -62,7 +47,7 @@ async fn markets_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
     let merged = MergedToolset::new(toolsets);
-    let tools = gemini::filtered(gemini::wrap_toolset(merged), MARKETS_TOOLS);
+    let tools = gemini::filtered_for_agent("markets_agent", merged);
     let agent = LlmAgentBuilder::new("markets_agent")
         .description("Live markets card")
         .model(model)
@@ -89,7 +74,7 @@ async fn now_agent(
     news: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(news), NOW_TOOLS);
+    let tools = gemini::filtered_for_agent("now_agent", news);
     let agent = LlmAgentBuilder::new("now_agent")
         .description("Live Now card — trending + breaking")
         .model(model)

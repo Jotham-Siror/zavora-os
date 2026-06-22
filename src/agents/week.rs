@@ -17,18 +17,6 @@ pub struct WeekMcpPool {
     pub health_csv: Option<std::path::PathBuf>,
 }
 
-const MONEY_TOOLS: &[&str] = &[
-    "list_transactions",
-    "search_transactions",
-    "list_accounts",
-];
-
-const FOCUS_TOOLS: &[&str] = &[
-    "list_commits",
-    "list_pull_requests",
-    "search_repositories",
-];
-
 fn health_agent(csv_path: Option<std::path::PathBuf>) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(path) = csv_path.filter(|p| p.exists()) {
         let path = path.clone();
@@ -93,7 +81,7 @@ async fn money_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = banking {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), MONEY_TOOLS);
+        let tools = gemini::filtered_for_agent("money_agent", ts);
         let agent = LlmAgentBuilder::new("money_agent")
             .description("Money card — weekly spend")
             .model(model)
@@ -126,7 +114,7 @@ async fn focus_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = github {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), FOCUS_TOOLS);
+        let tools = gemini::filtered_for_agent("focus_agent", ts);
         let agent = LlmAgentBuilder::new("focus_agent")
             .description("Focus card — shipping and deep work")
             .model(model)

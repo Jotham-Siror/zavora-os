@@ -5,22 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const SLIDES_TOOLS: &[&str] = &[
-    "create_presentation",
-    "add_slide",
-    "save_presentation",
-    "describe_presentation",
-    "list_templates",
-    "render_slide",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), SLIDES_TOOLS);
+    let tools = gemini::filtered_for_agent("slides_agent", toolset);
 
     let agent = LlmAgentBuilder::new("slides_agent")
         .description("Builds the pitch deck presentation")

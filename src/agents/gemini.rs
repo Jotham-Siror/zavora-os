@@ -121,3 +121,13 @@ pub fn filtered(
         adk_tool::string_predicate(allowed.iter().map(|s| (*s).to_string()).collect()),
     ))
 }
+
+/// Apply the MCP Registry allowlist for `agent` from `mcp_allowlists.toml`.
+pub fn filtered_for_agent(
+    agent: &str,
+    toolset: Arc<dyn adk_core::Toolset>,
+) -> Arc<dyn adk_core::Toolset> {
+    let allowed = crate::tools::allowlist::tools_for_agent(agent);
+    let refs: Vec<&str> = allowed.iter().map(|s| s.as_str()).collect();
+    filtered(wrap_toolset(toolset), &refs)
+}

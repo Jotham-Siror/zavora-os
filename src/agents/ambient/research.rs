@@ -5,15 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use crate::agents::gemini;
 
-const TOOLS: &[&str] = &["gnews_top_headlines", "search_news", "get_trending_topics"];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     news: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(news), TOOLS);
+    let tools = gemini::filtered_for_agent("research_agent", news);
 
     let agent = LlmAgentBuilder::new("research_agent")
         .description("Background research on topics of interest")

@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub static_dir: PathBuf,
     pub audio_dir: PathBuf,
     pub business_toml: PathBuf,
+    pub mcp_allowlists_toml: PathBuf,
+    pub mcp_registry_path: Option<PathBuf>,
     pub artifact_dir: PathBuf,
     pub mcp_worksheet_path: PathBuf,
     pub mcp_docx_path: PathBuf,
@@ -50,6 +52,18 @@ impl AppConfig {
             static_dir: manifest_dir.join("web/static"),
             audio_dir: manifest_dir.join("audio"),
             business_toml: manifest_dir.join("business.toml"),
+            mcp_allowlists_toml: manifest_dir.join("mcp_allowlists.toml"),
+            mcp_registry_path: std::env::var("MCP_REGISTRY_PATH")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .map(|raw| {
+                    let path = PathBuf::from(&raw);
+                    if path.is_absolute() {
+                        path
+                    } else {
+                        manifest_dir.join(path)
+                    }
+                }),
             artifact_dir: manifest_dir
                 .join(std::env::var("ARTIFACT_DIR").unwrap_or_else(|_| "./artifacts".into())),
             mcp_worksheet_path: resolve_path(

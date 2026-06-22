@@ -1,0 +1,194 @@
+# MCP Registry-compatible tool allowlists per sub-agent (BK-011).
+# Discovery ≠ exposure: agents only receive tools listed for their agent id.
+
+[[allowlist]]
+agent = "excel_agent"
+mcp_server = "worksheet"
+reason = "Deck revenue spreadsheet — write-only workbook tools"
+tools = [
+  "create_workbook",
+  "open_workbook",
+  "save_workbook",
+  "write_cells",
+  "write_column",
+  "write_row",
+  "add_chart",
+  "describe_workbook",
+  "list_sheets",
+  "set_cell_format",
+]
+
+[[allowlist]]
+agent = "docs_agent"
+mcp_server = "docx"
+reason = "Deck narrative doc — paragraph writes only"
+tools = [
+  "create_document",
+  "insert_paragraph",
+  "save_document",
+  "read_paragraphs",
+  "document_outline",
+  "list_templates",
+]
+
+[[allowlist]]
+agent = "slides_agent"
+mcp_server = "slides"
+reason = "Deck slides assembly"
+tools = [
+  "create_presentation",
+  "add_slide",
+  "save_presentation",
+  "describe_presentation",
+  "list_templates",
+  "render_slide",
+]
+
+[[allowlist]]
+agent = "combine_agent"
+mcp_server = "slides"
+reason = "Merge excel+docs into final deck"
+tools = [
+  "open_presentation",
+  "describe_presentation",
+  "read_slide",
+  "to_markdown",
+  "add_slide",
+  "add_bullets",
+  "set_title",
+  "add_table",
+  "set_table_cell",
+  "add_text_box",
+  "set_notes",
+  "save_presentation",
+  "render_slide",
+]
+
+[[allowlist]]
+agent = "calendar_agent"
+mcp_server = "calendar"
+reason = "Morning calendar card"
+tools = [
+  "get_today",
+  "list_events",
+  "find_free_time",
+  "search_events",
+  "list_calendars",
+]
+
+[[allowlist]]
+agent = "inbox_agent"
+mcp_server = "email"
+reason = "Morning inbox card"
+tools = ["list_inbox", "search_emails", "create_draft", "get_email"]
+
+[[allowlist]]
+agent = "brief_agent"
+mcp_server = "news"
+reason = "Today brief — headlines"
+tools = ["gnews_top_headlines", "search_news", "get_country_news"]
+
+[[allowlist]]
+agent = "brief_agent"
+mcp_server = "weather"
+reason = "Today brief — forecast"
+tools = ["get_forecast", "geocode_location"]
+
+[[allowlist]]
+agent = "headlines_agent"
+mcp_server = "news"
+reason = "Live headlines carousel"
+tools = [
+  "gnews_top_headlines",
+  "search_news",
+  "get_country_news",
+  "get_trending_topics",
+]
+
+[[allowlist]]
+agent = "markets_agent"
+mcp_server = "news"
+reason = "Live markets — trending context"
+tools = ["get_trending_topics"]
+
+[[allowlist]]
+agent = "markets_agent"
+mcp_server = "market_data"
+reason = "Live markets — quotes"
+tools = ["yfinance_chart"]
+
+[[allowlist]]
+agent = "now_agent"
+mcp_server = "news"
+reason = "Live now strip"
+tools = ["gnews_top_headlines", "get_trending_topics", "search_news"]
+
+[[allowlist]]
+agent = "team_agent"
+mcp_server = "slack"
+reason = "People rail — team channels"
+tools = [
+  "list_channels",
+  "get_channel_history",
+  "search_messages",
+  "list_dms",
+]
+
+[[allowlist]]
+agent = "priya_agent"
+mcp_server = "calendar"
+reason = "People rail — Priya calendar"
+tools = ["list_events", "search_events", "find_free_time", "get_today"]
+
+[[allowlist]]
+agent = "connections_agent"
+mcp_server = "crm"
+reason = "People rail — CRM connections"
+tools = [
+  "search_contacts",
+  "list_contacts",
+  "list_activities",
+  "list_deals",
+]
+
+[[allowlist]]
+agent = "money_agent"
+mcp_server = "banking"
+reason = "Week rail — money"
+tools = ["list_transactions", "search_transactions", "list_accounts"]
+
+[[allowlist]]
+agent = "focus_agent"
+mcp_server = "github"
+reason = "Week rail — engineering focus"
+tools = ["list_commits", "list_pull_requests", "search_repositories"]
+
+[[allowlist]]
+agent = "planner_agent"
+mcp_server = "maps"
+reason = "Lisbon itinerary — POI and routes"
+tools = ["geocode", "search_poi", "get_route"]
+
+[[allowlist]]
+agent = "planner_agent"
+mcp_server = "weather"
+reason = "Lisbon itinerary — forecast"
+tools = ["get_forecast", "geocode_location"]
+
+[[allowlist]]
+agent = "stay_agent"
+mcp_server = "real_estate"
+reason = "Lisbon stay search"
+tools = ["geocode_search", "search_properties_nearby", "us_search_properties"]
+
+[[allowlist]]
+agent = "research_agent"
+mcp_server = "news"
+reason = "Ambient research"
+tools = ["gnews_top_headlines", "search_news", "get_trending_topics"]
+
+[[allowlist]]
+agent = "scout_agent"
+mcp_server = "real_estate"
+reason = "Ambient scout — listings"
+tools = ["search_properties_nearby", "geocode_search"]

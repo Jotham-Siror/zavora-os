@@ -5,29 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const COMBINE_TOOLS: &[&str] = &[
-    "open_presentation",
-    "describe_presentation",
-    "read_slide",
-    "to_markdown",
-    "add_slide",
-    "add_bullets",
-    "set_title",
-    "add_table",
-    "set_table_cell",
-    "add_text_box",
-    "set_notes",
-    "save_presentation",
-    "render_slide",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), COMBINE_TOOLS);
+    let tools = gemini::filtered_for_agent("combine_agent", toolset);
 
     let agent = LlmAgentBuilder::new("combine_agent")
         .description("Merges excel + docs artifacts into the final pitch deck")

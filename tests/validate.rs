@@ -315,6 +315,34 @@ fn awp_gate_fixture() -> spatial_os::awp_gate::AwpGate {
     spatial_os::awp_gate::AwpGate::new(Some("validate-jwt-secret".into()), loader.context_ref())
 }
 
+#[test]
+fn mcp_allowlist_catalog_covers_deck_agents() {
+    let path = common::manifest_dir().join("mcp_allowlists.toml");
+    let catalog = spatial_os::tools::allowlist::AllowlistCatalog::from_file(&path)
+        .expect("mcp_allowlists.toml");
+
+    for agent in [
+        "excel_agent",
+        "docs_agent",
+        "slides_agent",
+        "combine_agent",
+        "brief_agent",
+        "headlines_agent",
+    ] {
+        assert!(
+            catalog.contains_agent(agent),
+            "missing allowlist for {agent}"
+        );
+        assert!(
+            !catalog.tools_for_agent(agent).is_empty(),
+            "empty tools for {agent}"
+        );
+    }
+
+    assert_eq!(catalog.tools_for_agent("excel_agent").len(), 10);
+    assert!(catalog.tools_for_agent("brief_agent").contains(&"get_forecast".to_string()));
+}
+
 #[tokio::test]
 async fn awp_gate_allows_anonymous_intent() {
     use axum::http::HeaderMap;

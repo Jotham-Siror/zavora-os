@@ -15,20 +15,6 @@ pub struct LisbonMcpPool {
     pub real_estate: Option<Arc<dyn adk_core::Toolset>>,
 }
 
-const PLANNER_TOOLS: &[&str] = &[
-    "geocode",
-    "search_poi",
-    "get_route",
-    "get_forecast",
-    "geocode_location",
-];
-
-const STAY_TOOLS: &[&str] = &[
-    "geocode_search",
-    "search_properties_nearby",
-    "us_search_properties",
-];
-
 async fn flights_agent() -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     stub::labeled_stub(
         "flights_agent",
@@ -44,7 +30,7 @@ async fn stay_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = real_estate {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), STAY_TOOLS);
+        let tools = gemini::filtered_for_agent("stay_agent", ts);
         let agent = LlmAgentBuilder::new("stay_agent")
             .description("Stay scout — real estate MCP")
             .model(model)
@@ -83,7 +69,7 @@ async fn planner_agent(
     }
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
     let merged = MergedToolset::new(parts);
-    let tools = gemini::filtered(gemini::wrap_toolset(merged), PLANNER_TOOLS);
+    let tools = gemini::filtered_for_agent("planner_agent", merged);
     let agent = LlmAgentBuilder::new("planner_agent")
         .description("Itinerary planner — maps + weather")
         .model(model)

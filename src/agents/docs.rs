@@ -5,22 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const DOCS_TOOLS: &[&str] = &[
-    "create_document",
-    "insert_paragraph",
-    "save_document",
-    "read_paragraphs",
-    "document_outline",
-    "list_templates",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), DOCS_TOOLS);
+    let tools = gemini::filtered_for_agent("docs_agent", toolset);
 
     let agent = LlmAgentBuilder::new("docs_agent")
         .description("Drafts the pitch deck narrative document")

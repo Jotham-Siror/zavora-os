@@ -6,14 +6,6 @@ use adk_model::gemini::GeminiModel;
 use super::gemini;
 use crate::tools::merge::MergedToolset;
 
-const BRIEF_TOOLS: &[&str] = &[
-    "gnews_top_headlines",
-    "search_news",
-    "get_country_news",
-    "get_forecast",
-    "geocode_location",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
@@ -22,7 +14,7 @@ pub async fn build(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
     let merged = MergedToolset::new(vec![news, weather]);
-    let tools = gemini::filtered(gemini::wrap_toolset(merged), BRIEF_TOOLS);
+    let tools = gemini::filtered_for_agent("brief_agent", merged);
 
     let agent = LlmAgentBuilder::new("brief_agent")
         .description("Composes the morning brief from news and weather")

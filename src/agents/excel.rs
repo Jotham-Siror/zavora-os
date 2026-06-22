@@ -5,26 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const EXCEL_TOOLS: &[&str] = &[
-    "create_workbook",
-    "open_workbook",
-    "save_workbook",
-    "write_cells",
-    "write_column",
-    "write_row",
-    "add_chart",
-    "describe_workbook",
-    "list_sheets",
-    "set_cell_format",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), EXCEL_TOOLS);
+    let tools = gemini::filtered_for_agent("excel_agent", toolset);
 
     let agent = LlmAgentBuilder::new("excel_agent")
         .description("Builds the pitch deck revenue spreadsheet")

@@ -6,8 +6,6 @@ use adk_model::gemini::GeminiModel;
 use crate::agents::gemini;
 use crate::agents::stub;
 
-const REAL_ESTATE_TOOLS: &[&str] = &["search_properties_nearby", "geocode_search"];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
@@ -15,7 +13,7 @@ pub async fn build(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = real_estate {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), REAL_ESTATE_TOOLS);
+        let tools = gemini::filtered_for_agent("scout_agent", ts);
         let agent = LlmAgentBuilder::new("scout_agent")
             .description("Background price and listing scout")
             .model(model)

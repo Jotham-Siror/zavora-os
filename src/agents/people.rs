@@ -13,27 +13,6 @@ pub struct PeopleMcpPool {
     pub calendar: Option<Arc<dyn adk_core::Toolset>>,
 }
 
-const TEAM_TOOLS: &[&str] = &[
-    "list_channels",
-    "get_channel_history",
-    "search_messages",
-    "list_dms",
-];
-
-const PRIYA_TOOLS: &[&str] = &[
-    "list_events",
-    "search_events",
-    "find_free_time",
-    "get_today",
-];
-
-const CONNECTIONS_TOOLS: &[&str] = &[
-    "search_contacts",
-    "list_contacts",
-    "list_activities",
-    "list_deals",
-];
-
 async fn team_agent(
     api_key: &str,
     model_name: &str,
@@ -41,7 +20,7 @@ async fn team_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = slack {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), TEAM_TOOLS);
+        let tools = gemini::filtered_for_agent("team_agent", ts);
         let agent = LlmAgentBuilder::new("team_agent")
             .description("Team card — Slack channels and DMs")
             .model(model)
@@ -75,7 +54,7 @@ async fn priya_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = calendar {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), PRIYA_TOOLS);
+        let tools = gemini::filtered_for_agent("priya_agent", ts);
         let agent = LlmAgentBuilder::new("priya_agent")
             .description("Priya 1:1 prep card")
             .model(model)
@@ -109,7 +88,7 @@ async fn connections_agent(
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     if let Some(ts) = crm {
         let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-        let tools = gemini::filtered(gemini::wrap_toolset(ts), CONNECTIONS_TOOLS);
+        let tools = gemini::filtered_for_agent("connections_agent", ts);
         let agent = LlmAgentBuilder::new("connections_agent")
             .description("Connections card — CRM follow-ups")
             .model(model)

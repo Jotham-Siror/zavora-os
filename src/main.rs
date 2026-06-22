@@ -40,6 +40,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env()?;
+    spatial_os::tools::allowlist::init(&config.mcp_allowlists_toml)?;
+    if let Err(e) = spatial_os::tools::registry::try_sync(&config, spatial_os::tools::allowlist::catalog()).await {
+        tracing::warn!("mcp-registry sync skipped ({e:#})");
+    }
     tokio::fs::create_dir_all(&config.artifact_dir).await?;
 
     let loader = BusinessContextLoader::from_file(&config.business_toml)?;

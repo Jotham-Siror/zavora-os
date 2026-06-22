@@ -5,20 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const INBOX_TOOLS: &[&str] = &[
-    "list_inbox",
-    "search_emails",
-    "create_draft",
-    "get_email",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), INBOX_TOOLS);
+    let tools = gemini::filtered_for_agent("inbox_agent", toolset);
 
     let agent = LlmAgentBuilder::new("inbox_agent")
         .description("Triages inbox and flags emails that need the user")

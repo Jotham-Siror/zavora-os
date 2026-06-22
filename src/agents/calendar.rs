@@ -5,21 +5,13 @@ use adk_model::gemini::GeminiModel;
 
 use super::gemini;
 
-const CALENDAR_TOOLS: &[&str] = &[
-    "get_today",
-    "list_events",
-    "find_free_time",
-    "search_events",
-    "list_calendars",
-];
-
 pub async fn build(
     api_key: &str,
     model_name: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> anyhow::Result<Arc<dyn adk_core::Agent>> {
     let model = Arc::new(GeminiModel::new(api_key, model_name)?);
-    let tools = gemini::filtered(gemini::wrap_toolset(toolset), CALENDAR_TOOLS);
+    let tools = gemini::filtered_for_agent("calendar_agent", toolset);
 
     let agent = LlmAgentBuilder::new("calendar_agent")
         .description("Summarizes today's calendar")
