@@ -93,8 +93,24 @@
       } catch (_) {
         return;
       }
+      if (msg.type === 'connected' && msg.session_id) {
+        sessionId = msg.session_id;
+        try {
+          sessionStorage.setItem('zavora_session_id', sessionId);
+        } catch (_) {}
+      }
       if (msg.type === 'transcript' && msg.content && onTranscript) {
         onTranscript(msg.content);
+      }
+      if (msg.type === 'tool_call' && msg.name === 'submit_intent') {
+        const sid = msg.arguments?.session_id || sessionId;
+        if (sid) {
+          sessionStorage.setItem('zavora_session_id', sid);
+          sessionId = sid;
+        }
+        window.dispatchEvent(
+          new CustomEvent('zavora:voice-intent', { detail: { sessionId: sid, args: msg.arguments } })
+        );
       }
       if (msg.type === 'error') {
         console.warn('live voice:', msg.message);

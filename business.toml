@@ -114,6 +114,20 @@ method = "POST"
 access_level = "known"
 
 [[capabilities]]
+name = "stream_voice"
+description = "WebSocket stream for Suzy live voice (mic PCM in, spoken PCM out); submit_intent tool runs orchestration in background"
+endpoint = "/ws/voice"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "voice_status"
+description = "Whether Gemini Live voice is configured and sample rates for the client bridge"
+endpoint = "/api/voice/status"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
 name = "stream_ambient"
 description = "SSE stream of proactive agent rail updates (research, scout, maker)"
 endpoint = "/api/ambient"

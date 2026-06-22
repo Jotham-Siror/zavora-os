@@ -61,6 +61,34 @@
     await ensureSession();
   }
 
+  async function pollVoiceHydration(sid, intentText, maxMs = 60000) {
+    if (intentText) {
+      ui.originText.textContent = intentText;
+      ui.origin.classList.add('show');
+      ui.chips.classList.add('hide');
+      ui.suzy.classList.remove('show');
+      ui.exitFlow();
+    }
+    const deadline = Date.now() + maxMs;
+    while (Date.now() < deadline) {
+      if (await hydrateFromServer(sid)) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return false;
+  }
+
+  function onVoiceIntent(ev) {
+    const sid = ev.detail?.sessionId;
+    const text = (ev.detail?.args?.text || '').trim();
+    const run = async () => {
+      const id = sid || (await ensureSession());
+      rememberSession(id);
+      const ok = await pollVoiceHydration(id, text);
+      if (!ok) console.warn('[zavora] voice intent — no cards yet for session', id);
+    };
+    run().catch((err) => console.warn('[zavora] voice intent hydrate failed', err));
+  }
+
   async function apiSnooze(title, glyph, agent) {
     await ensureSession();
     const id = agent || title;
@@ -335,6 +363,7 @@
   };
 
   wirePersistence();
+  window.addEventListener('zavora:voice-intent', onVoiceIntent);
   initSession().catch(() => ensureSession().catch(() => {}));
   console.info('[zavora] live mode — SSE orchestration + persistence enabled');
 })();

@@ -40,7 +40,9 @@ pub async fn build_suzy_runner(
     }
 
     let sessions = state.sessions.clone();
-    let sid_for_tool = session_id.clone();
+    let sid_for_context = session_id.clone();
+    let sid_for_intent = session_id.clone();
+    let state_for_intent = state.clone();
 
     let runner = RealtimeRunner::builder()
         .model(model)
@@ -63,7 +65,7 @@ pub async fn build_suzy_runner(
             },
             FnToolHandler::new(move |_call| {
                 let sessions = sessions.clone();
-                let sid = sid_for_tool.clone();
+                let sid = sid_for_context.clone();
                 if let (Some(sid), Ok(handle)) = (sid, tokio::runtime::Handle::try_current()) {
                     if let Some(record) = handle.block_on(sessions.get(&sid)) {
                         return Ok(json!({
@@ -75,6 +77,73 @@ pub async fn build_suzy_runner(
                 Ok(json!({
                     "session_id": null,
                     "context": "No active session — ask what the user would like to do."
+                }))
+            }),
+        )
+        .tool(
+            ToolDefinition {
+                name: "submit_intent".into(),
+                description: Some(
+                    "Start orchestration for a user request (deck, morning brief, trip, etc.). \
+                     Call when the user asks to do something that should spawn field cards."
+                        .into(),
+                ),
+                parameters: Some(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "The user's intent in natural language"
+                        }
+                    },
+                    "required": ["text"]
+                })),
+            },
+            FnToolHandler::new(move |call| {
+                let text = call.arguments["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if text.is_empty() {
+                    return Ok(json!({
+                        "status": "error",
+                        "message": "intent text required"
+                    }));
+                }
+
+                let state = state_for_intent.clone();
+                let sid = sid_for_intent.clone();
+                let handle = tokio::runtime::Handle::try_current().ok();
+                let Some(handle) = handle else {
+                    return Ok(json!({
+                        "status": "error",
+                        "message": "runtime unavailable"
+                    }));
+                };
+
+                let (session_id, user_id) = match sid {
+                    Some(ref id) => {
+                        let Some(record) = handle.block_on(state.sessions.get(id)) else {
+                            return Ok(json!({
+                                "status": "error",
+                                "message": "session not found"
+                            }));
+                        };
+                        (record.session_id, record.user_id)
+                    }
+                    None => {
+                        let record = handle.block_on(state.sessions.create());
+                        (record.session_id, record.user_id)
+                    }
+                };
+
+                crate::voice::dispatch::spawn_voice_intent(state, session_id.clone(), user_id, text.clone());
+
+                Ok(json!({
+                    "status": "started",
+                    "session_id": session_id,
+                    "intent": text
                 }))
             }),
         )

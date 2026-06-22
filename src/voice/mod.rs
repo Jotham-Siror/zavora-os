@@ -1,3 +1,4 @@
+pub mod dispatch;
 pub mod realtime;
 
 use std::sync::Arc;
