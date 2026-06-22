@@ -356,6 +356,7 @@ pub struct AppState {
     pub greeting_runner: Option<Arc<Runner>>,
     pub brand_greeting_body: String,
     pub brand_tone: Option<String>,
+    pub voice: crate::voice::VoiceState,
 }
 
 impl AppState {
@@ -389,6 +390,7 @@ impl AppState {
         greeting_runner: Option<Arc<Runner>>,
         brand_greeting_body: String,
         brand_tone: Option<String>,
+        voice: crate::voice::VoiceState,
     ) -> Self {
         Self {
             sessions,
@@ -419,6 +421,7 @@ impl AppState {
             greeting_runner,
             brand_greeting_body,
             brand_tone,
+            voice,
         }
     }
 }

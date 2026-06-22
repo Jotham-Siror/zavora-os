@@ -14,3 +14,4 @@ pub mod live;
 pub mod oauth;
 pub mod people;
 pub mod session;
+pub mod voice;

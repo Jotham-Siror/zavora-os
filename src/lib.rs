@@ -14,3 +14,4 @@ pub mod routes;
 pub mod scenarios;
 pub mod state;
 pub mod tools;
+pub mod voice;

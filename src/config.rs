@@ -29,6 +29,8 @@ pub struct AppConfig {
     pub mcp_real_estate_path: PathBuf,
     pub google_api_key: Option<String>,
     pub gemini_model: String,
+    pub gemini_live_model: String,
+    pub voice_name: String,
     pub database_url: Option<String>,
     pub jwt_secret: Option<String>,
     pub google_oauth_client_id: Option<String>,
@@ -139,6 +141,10 @@ impl AppConfig {
             google_api_key: std::env::var("GOOGLE_API_KEY").ok().filter(|k| !k.is_empty()),
             gemini_model: std::env::var("GEMINI_MODEL")
                 .unwrap_or_else(|_| "gemini-3.1-flash-lite".into()),
+            gemini_live_model: std::env::var("GEMINI_LIVE_MODEL").unwrap_or_else(|_| {
+                "models/gemini-2.5-flash-live-preview".into()
+            }),
+            voice_name: std::env::var("VOICE_NAME").unwrap_or_else(|_| "Aoede".into()),
             database_url: std::env::var("DATABASE_URL").ok().filter(|s| !s.is_empty()),
             jwt_secret: std::env::var("JWT_SECRET").ok().filter(|s| !s.is_empty()),
             google_oauth_client_id: std::env::var("GOOGLE_OAUTH_CLIENT_ID")
@@ -173,6 +179,10 @@ impl AppConfig {
 
     pub fn agents_enabled(&self) -> bool {
         self.deck_enabled()
+    }
+
+    pub fn voice_enabled(&self) -> bool {
+        self.google_api_key.is_some()
     }
 }
 

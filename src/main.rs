@@ -14,6 +14,7 @@ use spatial_os::routes;
 use spatial_os::scenarios::ScenarioLiveFlags;
 use spatial_os::state::{AppState, SessionStore, SharedSessionService};
 use spatial_os::tools;
+use spatial_os::voice::VoiceState;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -32,6 +33,8 @@ use tower_http::services::ServeDir;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -213,6 +216,15 @@ async fn main() -> anyhow::Result<()> {
         loader.context_ref(),
     ));
 
+    let voice = VoiceState::boot(&config);
+    if voice.enabled {
+        tracing::info!(
+            "Gemini Live voice enabled (model={}, voice={})",
+            config.gemini_live_model,
+            voice.voice_name
+        );
+    }
+
     let app_state = AppState::new(
         session_store,
         config.artifact_dir.clone(),
@@ -242,6 +254,7 @@ async fn main() -> anyhow::Result<()> {
         greeting_runner,
         brand_greeting_body,
         brand_tone,
+        voice,
     );
     let session_store = app_state.sessions.clone();
 
@@ -264,7 +277,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/ambient/status", get(routes::ambient::list_ambient))
         .route("/api/ambient/dnd", post(routes::ambient::set_dnd))
         .route("/api/oauth/{provider}", get(routes::oauth::oauth_guide))
-        .route("/api/sessions", post(routes::session::create_session));
+        .route("/api/sessions", post(routes::session::create_session))
+        .route("/api/voice/status", get(routes::voice::status))
+        .route("/ws/voice", get(routes::voice::ws_voice));
 
     let mut api = api;
 

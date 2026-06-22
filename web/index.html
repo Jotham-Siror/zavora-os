@@ -1421,15 +1421,13 @@ chips.querySelectorAll('.chip').forEach(c =>
 // ---- speak to it (voice input) ----
 const mic = document.getElementById('mic');
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SR){
+function startSpeechFallback(){
+  if (!SR) { input.placeholder = 'Voice needs Chrome or Safari'; return; }
   const rec = new SR();
   rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1;
   let finalText = '';
-  mic.addEventListener('click', () => {
-    if (mic.classList.contains('listening')) { rec.stop(); return; }
-    finalText = ''; input.value = ''; input.placeholder = 'Listening…';
-    mic.classList.add('listening'); rec.start();
-  });
+  finalText = ''; input.value = ''; input.placeholder = 'Listening…';
+  mic.classList.add('listening'); rec.start();
   rec.onresult = e => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++){
@@ -1443,9 +1441,28 @@ if (SR){
     mic.classList.remove('listening'); input.placeholder = 'What do you want to do?';
     if (input.value.trim()) submitIntent(input.value);
   };
-} else {
-  mic.addEventListener('click', () => { input.placeholder = 'Voice needs Chrome or Safari'; });
 }
+mic.addEventListener('click', async () => {
+  const live = window.ZavoraLiveVoice;
+  if (live?.isActive?.()) {
+    live.stop();
+    mic.classList.remove('listening');
+    input.placeholder = 'What do you want to do?';
+    return;
+  }
+  if (live?.isEnabled?.()) {
+    mic.classList.add('listening');
+    input.placeholder = 'Suzy is listening…';
+    const sid = sessionStorage.getItem('zavora_session_id');
+    const ok = await live.start({
+      sessionId: sid,
+      onTranscript: (t) => { if (t.trim()) { input.value = t.trim(); submitIntent(t.trim()); live.stop(); } },
+    });
+    if (ok) return;
+    mic.classList.remove('listening');
+  }
+  startSpeechFallback();
+});
 
 // click empty space exits focus
 document.querySelector('.field').addEventListener('click', e => {
@@ -1961,6 +1978,17 @@ async function playGreeting(){
   greetCC.innerHTML = words.map(w => `<span class="w">${w}</span>`).join(' ');
   greetCC.classList.add('show');
   const spans = [...greetCC.querySelectorAll('.w')];
+  const live = window.ZavoraLiveVoice;
+  if (live?.isEnabled?.()) {
+    const liveOk = await live.speakText(caption);
+    if (liveOk) {
+      spans.forEach(s => s.classList.add('lit'));
+      greetingPlayed = true;
+      document.getElementById('tapHint')?.classList.add('gone');
+      greetingBusy = false;
+      return;
+    }
+  }
   const ok = await speakUrl(greetingAudioUrl(), audio => {
     const lit = () => {
       const p = audio.duration ? audio.currentTime / audio.duration : 0;
@@ -2239,6 +2267,7 @@ submitIntent = function (text) {
 };
 
 </script>
+<script src="/static/live-voice.js"></script>
 <script src="/static/field-client.js"></script>
 </body>
 </html>

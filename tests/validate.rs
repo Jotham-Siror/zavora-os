@@ -344,6 +344,19 @@ async fn dev_auth_jwt_unlocks_known_awp_capabilities() {
 }
 
 #[test]
+fn voice_state_boots_when_api_key_present() {
+    common::load_env();
+    let config = AppConfig::from_env().expect("config");
+    let voice = spatial_os::voice::VoiceState::boot(&config);
+    if config.voice_enabled() {
+        assert!(voice.enabled);
+        assert!(voice.model.is_some());
+    } else {
+        assert!(!voice.enabled);
+    }
+}
+
+#[test]
 fn mcp_allowlist_catalog_covers_deck_agents() {
     let path = common::manifest_dir().join("mcp_allowlists.toml");
     let catalog = spatial_os::tools::allowlist::AllowlistCatalog::from_file(&path)
