@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """One-shot: generate voice clips for the Field prototype, then never call TTS again.
-Reads GEMINI_API_KEY from ../adk-rust/.env. Saves audio/<id>.wav (24kHz PCM wrapped as WAV)."""
+Reads GEMINI_API_KEY from ../../adk-rust/.env. Saves ../audio/<id>.wav (24kHz PCM wrapped as WAV)."""
 import base64, json, os, re, struct, urllib.request, pathlib
 
 KEY = None
-for line in pathlib.Path("../adk-rust/.env").read_text().splitlines():
+for line in pathlib.Path("../../adk-rust/.env").read_text().splitlines():
     if line.startswith("GEMINI_API_KEY="):
         KEY = line.split("=", 1)[1].strip().strip('"').strip("'")
 assert KEY, "GEMINI_API_KEY not found"
@@ -48,7 +48,8 @@ def gen(text):
     rate = int((re.search(r"rate=(\d+)", inline["mimeType"]) or [None, "24000"])[1])
     return wav(base64.b64decode(inline["data"]), rate)
 
-out = pathlib.Path("audio"); out.mkdir(exist_ok=True)
+out = pathlib.Path(__file__).resolve().parent.parent / "audio"
+out.mkdir(exist_ok=True)
 for cid, text in CLIPS.items():
     f = out / f"{cid}.wav"
     if f.exists(): print("· skip", cid); continue

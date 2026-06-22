@@ -1872,6 +1872,50 @@ document.getElementById('eaShare').addEventListener('click', e => {
   e.currentTarget.textContent = '✓ Link copied';
 });
 
+// ---- live mode bridge (field-client.js) ----
+window.__ZAVORA_DEMO__ =
+  new URLSearchParams(location.search).get('demo') === '1' ||
+  localStorage.getItem('zavora_demo') === '1';
+
+const __legacySubmitIntent = submitIntent;
+window.__ZAVORA_UI__ = {
+  chips,
+  suzy,
+  origin,
+  originText,
+  input,
+  cardsEl,
+  launch,
+  buildCard,
+  buildSurface,
+  resolve,
+  exitFlow,
+  resetAgents,
+  agentActive,
+  conductAction,
+  legacySubmit: __legacySubmitIntent,
+  clearSuggestion() {
+    clearTimeout(suggestTimer);
+    pendingSuggestion = null;
+  },
+  setCurrentKey(v) { currentKey = v; },
+  setResolvedCount(v) { resolvedCount = v; },
+  setTotalCards(v) { totalCards = v; },
+  showSuzyCustom(html) {
+    suzyText.innerHTML = html;
+    suzy.classList.add('show');
+    speak(suzyText.textContent);
+    setTimeout(() => armSuggestion(actionPrompt[currentKey]), 1600);
+  },
+};
+
+submitIntent = function (text) {
+  if (window.__ZAVORA_DEMO__) return __legacySubmitIntent(text);
+  if (window.__ZAVORA_LIVE__?.submit) return window.__ZAVORA_LIVE__.submit(text);
+  return __legacySubmitIntent(text);
+};
+
 </script>
+<script src="/static/field-client.js"></script>
 </body>
 </html>
