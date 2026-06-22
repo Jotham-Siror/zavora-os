@@ -69,10 +69,8 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Commits
 
-- [ ] `feat(server): axum static shell`
-- [ ] `feat(api): session + intent SSE`
-- [ ] `feat(ui): field-client SSE bridge`
-- [ ] `feat(awp): business.toml + awp_routes merge`
+- [x] `chore(structure): organize project layout for M0`
+- [x] `feat(m0): axum server with SSE intent stream and AWP discovery`
 
 ---
 
