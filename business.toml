@@ -1,6 +1,6 @@
 site_name = "Zavora OS"
 site_description = "The agentic operating system that works while you live — spatial field UI with live agent orchestration."
-domain = "localhost:8080"
+domain = "localhost:9847"
 contact = "hello@zavora.example"
 
 [business]
@@ -12,7 +12,7 @@ timezone = "America/Los_Angeles"
 
 [brand_voice]
 tone = "warm, confident, quietly witty"
-greeting = "Good morning. Here's your day — meetings, emails, and a free window at noon."
+greeting = "I'm synced and ready — tell me what you'd like to do, or tap Start my day."
 escalation_message = "Let me connect you with the Zavora team."
 
 [[capabilities]]
@@ -52,7 +52,7 @@ access_level = "known"
 
 [[capabilities]]
 name = "get_greeting"
-description = "Personalized greeting from calendar when connected; static brand voice otherwise"
+description = "Personalized greeting from integration facts (calendar, email, news, weather) via greeting agent; honest brand voice when no integrations are connected"
 endpoint = "/api/greeting"
 method = "GET"
 access_level = "anonymous"

@@ -227,6 +227,9 @@ pub struct AppState {
     pub lisbon_mcp: Option<Arc<LisbonMcpPool>>,
     pub ambient: AmbientStore,
     pub ambient_enabled: bool,
+    pub greeting_runner: Option<Arc<Runner>>,
+    pub brand_greeting_body: String,
+    pub brand_tone: Option<String>,
 }
 
 impl AppState {
@@ -253,6 +256,9 @@ impl AppState {
         lisbon_mcp: Option<Arc<LisbonMcpPool>>,
         ambient: AmbientStore,
         ambient_enabled: bool,
+        greeting_runner: Option<Arc<Runner>>,
+        brand_greeting_body: String,
+        brand_tone: Option<String>,
     ) -> Self {
         Self {
             sessions: SessionStore::new(),
@@ -277,6 +283,9 @@ impl AppState {
             lisbon_mcp,
             ambient,
             ambient_enabled,
+            greeting_runner,
+            brand_greeting_body,
+            brand_tone,
         }
     }
 }

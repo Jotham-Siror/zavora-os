@@ -20,7 +20,7 @@ use adk_awp::{
     InMemoryEventSubscriptionService, InMemoryRateLimiter,
 };
 use adk_runner::Runner;
-use adk_session::InMemorySessionService;
+use adk_session::{CreateRequest, InMemorySessionService, SessionService};
 use axum::middleware::from_fn;
 use axum::routing::{delete, get, post};
 use axum::{Extension, Router};
@@ -38,6 +38,18 @@ async fn main() -> anyhow::Result<()> {
 
     let config = AppConfig::from_env()?;
     tokio::fs::create_dir_all(&config.artifact_dir).await?;
+
+    let loader = BusinessContextLoader::from_file(&config.business_toml)?;
+    let biz = loader.load();
+    tracing::info!("Loaded business context: {}", biz.site_name);
+    let brand_greeting_body = biz
+        .brand_voice
+        .as_ref()
+        .and_then(|b| b.greeting.clone())
+        .unwrap_or_else(|| {
+            "I'm synced and ready — tell me what you'd like to do, or tap Start my day.".into()
+        });
+    let brand_tone = biz.brand_voice.as_ref().and_then(|b| b.tone.clone());
 
     let session_service = Arc::new(InMemorySessionService::new());
 
@@ -141,6 +153,19 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let mut greeting_runner = None;
+    if config.agents_enabled() {
+        match boot_greeting_stack(&config, session_service.clone()).await {
+            Ok(runner) => {
+                tracing::info!("Greeting agent enabled (integration-fact composition)");
+                greeting_runner = Some(runner);
+            }
+            Err(e) => {
+                tracing::warn!("Greeting agent unavailable ({e:#}) — deterministic/brand fallback");
+            }
+        }
+    }
+
     let event_service = Arc::new(InMemoryEventSubscriptionService::new());
 
     let ambient_store = AmbientStore::new();
@@ -198,12 +223,11 @@ async fn main() -> anyhow::Result<()> {
         lisbon_mcp,
         ambient_store,
         ambient_enabled,
+        greeting_runner,
+        brand_greeting_body,
+        brand_tone,
     );
     let session_store = app_state.sessions.clone();
-
-    let loader = BusinessContextLoader::from_file(&config.business_toml)?;
-    let ctx = loader.load();
-    tracing::info!("Loaded business context: {}", ctx.site_name);
 
     let awp_state = AwpState {
         business_context: loader.context_ref(),
@@ -528,6 +552,38 @@ async fn boot_week_stack(
             .build()?,
     );
     Ok((runner, pool))
+}
+
+async fn boot_greeting_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<Arc<Runner>> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let agent =
+        spatial_os::greeting::agent::build(api_key, &config.gemini_model).await?;
+
+    session_service
+        .create(CreateRequest {
+            app_name: "zavora-os-greeting".into(),
+            user_id: "greeting-user".into(),
+            session_id: Some("greeting-session".into()),
+            state: Default::default(),
+        })
+        .await?;
+
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-greeting")
+            .agent(agent)
+            .session_service(session_service)
+            .build()?,
+    );
+
+    Ok(runner)
 }
 
 async fn boot_ambient_stack(

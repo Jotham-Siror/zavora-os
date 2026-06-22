@@ -284,6 +284,30 @@ async fn combine_agent_builds_with_configured_model() {
 }
 
 #[tokio::test]
+async fn greeting_brand_fallback_is_honest() {
+    let payload = spatial_os::greeting::compose(
+        None,
+        None,
+        "I'm synced and ready — tell me what you'd like to do.",
+        Some("warm, confident"),
+    )
+    .await;
+    assert_eq!(payload.source, "brand");
+    assert!(!payload.full_text.to_lowercase().contains("meetings"));
+    assert!(!payload.full_text.to_lowercase().contains("emails"));
+    assert!(payload.full_text.contains("I'm synced and ready"));
+    assert_eq!(payload.audio_clip, "/audio/greeting.wav");
+}
+
+#[tokio::test]
+async fn greeting_agent_builds_with_gemini() {
+    let api_key = common::google_api_key();
+    spatial_os::greeting::agent::build(&api_key, &common::gemini_model())
+        .await
+        .expect("greeting agent should build");
+}
+
+#[tokio::test]
 async fn ambient_store_tracks_agent_lifecycle() {
     use spatial_os::ambient::AmbientStore;
 

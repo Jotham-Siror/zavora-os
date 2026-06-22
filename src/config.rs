@@ -38,7 +38,7 @@ impl AppConfig {
         Ok(Self {
             host: std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into()),
             port: std::env::var("PORT")
-                .unwrap_or_else(|_| "8080".into())
+                .unwrap_or_else(|_| "9847".into())
                 .parse()
                 .context("PORT must be a number")?,
             web_dir: manifest_dir.join("web"),

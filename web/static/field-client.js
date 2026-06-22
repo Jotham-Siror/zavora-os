@@ -328,20 +328,7 @@
     },
   };
 
-  async function loadGreeting() {
-    try {
-      const res = await fetch('/api/greeting');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.text && ui.setGreetingLine) ui.setGreetingLine(data.text);
-    } catch (_) {
-      /* static greeting fallback */
-    }
-  }
-
   wirePersistence();
-  initSession()
-    .then(() => loadGreeting())
-    .catch(() => loadGreeting());
+  initSession().catch(() => ensureSession().catch(() => {}));
   console.info('[zavora] live mode — SSE orchestration + persistence enabled');
 })();

@@ -607,7 +607,7 @@
         <span class="gwm">ZAVORA<b>OS</b></span>
       </div>
       <div class="clock" id="clock"></div>
-      <h2>Good morning</h2>
+      <h2 class="greet-salute">Good morning</h2>
       <p class="cc" id="greetCC"></p>
       <div class="row">
         <button class="btn primary big-btn" id="greetYes">Start my day</button>
@@ -620,7 +620,7 @@
     <!-- stage 2: ambient (wallpaper + quote + jazz) -->
     <div class="greet-inner ambient" id="greetAmbient">
       <div class="clock" id="clock2"></div>
-      <h2>Good morning</h2>
+      <h2 class="greet-salute">Good morning</h2>
       <p class="quote" id="quote"></p>
       <button class="btn primary big-btn" id="greetYes2">Ready to start my day</button>
       <button class="mute" id="muteBtn" title="Toggle music">♪</button>
@@ -1763,17 +1763,62 @@ function tickClock(){
   const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   clockEl.textContent = t; clock2.textContent = t;
 }
-let GREETING_LINE = "Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon.";
 const greetCC = document.getElementById('greetCC');
 let greetingPlayed = false, greetingBusy = false;
+let greetingPayload = null;
+const GREETING_FALLBACK = {
+  salutation: 'Hello',
+  full_text: "I'm ready when you are — tell me what you'd like to do.",
+  audio_clip: '/audio/greeting.wav',
+};
+
+function salutationForHour(h = new Date().getHours()) {
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+function applySalutation(text) {
+  const s = text || salutationForHour();
+  document.querySelectorAll('.greet-salute').forEach((el) => { el.textContent = s; });
+}
+function greetingCaption() {
+  return greetingPayload?.full_text || GREETING_FALLBACK.full_text;
+}
+function greetingAudioUrl() {
+  const clip = greetingPayload?.audio_clip || GREETING_FALLBACK.audio_clip;
+  return clip.startsWith('/') ? clip : `/audio/${clip}`;
+}
+async function fetchGreetingPayload() {
+  if (window.__ZAVORA_DEMO__) {
+    greetingPayload = {
+      salutation: salutationForHour(),
+      full_text: `${salutationForHour()}. ${GREETING_FALLBACK.full_text}`,
+      source: 'demo',
+      audio_clip: GREETING_FALLBACK.audio_clip,
+    };
+    return;
+  }
+  try {
+    const res = await fetch('/api/greeting');
+    if (!res.ok) throw new Error('greeting fetch failed');
+    greetingPayload = await res.json();
+  } catch (_) {
+    greetingPayload = {
+      salutation: salutationForHour(),
+      full_text: `${salutationForHour()}. ${GREETING_FALLBACK.full_text}`,
+      source: 'fallback',
+      audio_clip: GREETING_FALLBACK.audio_clip,
+    };
+  }
+}
 async function playGreeting(){
   if (greetingBusy) return; greetingBusy = true;
-  // build the caption as word spans for synced reveal
-  const words = GREETING_LINE.split(' ');
+  const caption = greetingCaption();
+  const words = caption.split(' ');
   greetCC.innerHTML = words.map(w => `<span class="w">${w}</span>`).join(' ');
   greetCC.classList.add('show');
   const spans = [...greetCC.querySelectorAll('.w')];
-  const ok = await speak('greeting', audio => {
+  const ok = await speakUrl(greetingAudioUrl(), audio => {
     const lit = () => {
       const p = audio.duration ? audio.currentTime / audio.duration : 0;
       const n = Math.round(p * spans.length);
@@ -1787,9 +1832,26 @@ async function playGreeting(){
   greetingBusy = false;
 }
 let wallTimer, clockTimer, idleTimer;
-function openGreeting(){          // stage 1: minimal (pre-login)
+async function speakUrl(url, onAudio){
+  try {
+    stopVoice();
+    const audio = new Audio(url);
+    currentVoice = audio;
+    audio.addEventListener('ended', () => { if (currentVoice === audio) currentVoice = null; });
+    drive(audio);
+    if (onAudio) onAudio(audio);
+    await audio.play();
+    return true;
+  } catch (e){
+    if (e.name !== 'NotAllowedError') console.warn('greeting audio failed:', url, e.message);
+    return false;
+  }
+}
+async function openGreeting(){          // stage 1: minimal (pre-login)
   greet.classList.add('show');
   tickClock(); clockTimer = setInterval(tickClock, 10000);
+  await fetchGreetingPayload();
+  applySalutation(greetingPayload?.salutation);
   // try to greet immediately; if autoplay is blocked, the first interaction will trigger it
   playGreeting();
   idleTimer = setTimeout(() => {   // no action in 5 min → drift to ambient
@@ -2008,7 +2070,10 @@ window.__ZAVORA_UI__ = {
   finishDeck,
   hand,
   wait,
-  setGreetingLine(text) { GREETING_LINE = text; },
+  setGreetingPayload(payload) {
+    greetingPayload = payload;
+    if (payload?.salutation) applySalutation(payload.salutation);
+  },
   legacySubmit: __legacySubmitIntent,
   clearSuggestion() {
     clearTimeout(suggestTimer);

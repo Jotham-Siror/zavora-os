@@ -1,21 +1,15 @@
 use axum::{extract::State, Json};
-use serde::Serialize;
 
-use crate::greeting;
+use crate::greeting::{self, GreetingPayload};
 use crate::state::AppState;
 
-#[derive(Serialize)]
-pub struct GreetingResponse {
-    pub text: String,
-    pub source: &'static str,
-    pub audio_clip: &'static str,
-}
-
-pub async fn get_greeting(State(state): State<AppState>) -> Json<GreetingResponse> {
-    let (text, source) = greeting::personalized_text(state.morning_mcp.as_deref()).await;
-    Json(GreetingResponse {
-        text,
-        source,
-        audio_clip: "/audio/greeting.wav",
-    })
+pub async fn get_greeting(State(state): State<AppState>) -> Json<GreetingPayload> {
+    let payload = greeting::compose(
+        state.greeting_runner.as_ref(),
+        state.morning_mcp.as_deref(),
+        &state.brand_greeting_body,
+        state.brand_tone.as_deref(),
+    )
+    .await;
+    Json(payload)
 }

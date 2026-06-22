@@ -9,7 +9,7 @@ cp .env.example .env
 cargo run
 ```
 
-Open [http://localhost:8080](http://localhost:8080). Use `?demo=1` for offline simulation (no server SSE).
+Open [http://localhost:9847](http://localhost:9847). Use `?demo=1` for offline simulation (no server SSE).
 
 ## Layout
 
