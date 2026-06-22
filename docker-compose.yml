@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: spatial-os-postgres
+    environment:
+      POSTGRES_USER: spatial_os
+      POSTGRES_PASSWORD: spatial_os
+      POSTGRES_DB: spatial_os
+    ports:
+      - "5434:5432"
+    volumes:
+      - spatial_os_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spatial_os -d spatial_os"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  spatial_os_pgdata:
