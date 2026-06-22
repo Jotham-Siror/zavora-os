@@ -124,6 +124,50 @@ async fn mock_combine_action_stream_completes_with_events() {
 }
 
 #[tokio::test]
+async fn session_persistence_cards_and_agents() {
+    let store = spatial_os::state::SessionStore::new();
+    let record = store.create().await;
+    let sid = record.session_id;
+
+    store
+        .set_scenario(&sid, "deck", Some("Build me a pitch deck"))
+        .await;
+    store
+        .upsert_card(
+            &sid,
+            0,
+            serde_json::json!({"glyph":"📊","title":"Auto-Excel","agent":"auto-excel"}),
+            "resolved",
+            Some(serde_json::json!({"big":"+38%","sub":"ready"})),
+            false,
+        )
+        .await;
+    store
+        .agent_snooze(
+            &sid,
+            spatial_os::state::AgentRecord {
+                id: "auto-excel".into(),
+                title: "Auto-Excel".into(),
+                glyph: "📊".into(),
+                agent: "auto-excel".into(),
+                rail: "resting".into(),
+            },
+        )
+        .await;
+
+    let cards = store.list_cards(&sid).await.expect("cards");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].status, "resolved");
+
+    let (active, resting) = store.list_agents(&sid).await.expect("agents");
+    assert!(active.is_empty());
+    assert_eq!(resting.len(), 1);
+
+    let woke = store.agent_wake(&sid, "auto-excel").await.expect("wake");
+    assert_eq!(woke.title, "Auto-Excel");
+}
+
+#[tokio::test]
 async fn morning_phase_b_mcp_spawn() {
     let paths = common::mcp_paths();
     assert!(paths.news.exists(), "build mcp-news: cd mcp-servers/mcp-news && cargo build --release");

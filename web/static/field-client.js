@@ -15,13 +15,112 @@
   const ACTION_RE =
     /\b(do it|combine|merge|fold|book|hold|reply|draft|reserve|apply|arrange|organi[sz]e|sort it|handle it|take care|read aloud|show me|reply to them)\b/i;
 
+  const SESSION_KEY = 'zavora_session_id';
+
+  function rememberSession(id) {
+    sessionId = id;
+    try {
+      sessionStorage.setItem(SESSION_KEY, id);
+    } catch (_) {
+      /* private browsing */
+    }
+  }
+
   async function ensureSession() {
     if (sessionId) return sessionId;
     const res = await fetch('/api/sessions', { method: 'POST' });
     if (!res.ok) throw new Error('session create failed');
     const data = await res.json();
-    sessionId = data.session_id;
+    rememberSession(data.session_id);
     return sessionId;
+  }
+
+  async function hydrateFromServer(sid) {
+    const [cardsRes, agentsRes] = await Promise.all([
+      fetch(`/api/sessions/${sid}/cards`),
+      fetch(`/api/sessions/${sid}/agents`),
+    ]);
+    if (!cardsRes.ok) return false;
+    const cardsData = await cardsRes.json();
+    if (!cardsData.cards?.length) return false;
+    rememberSession(sid);
+    if (ui.hydrateField) ui.hydrateField(cardsData);
+    if (agentsRes.ok && ui.hydrateAgents) {
+      ui.hydrateAgents(await agentsRes.json());
+    }
+    cardsData.cards.forEach((entry, i) => {
+      const spec = entry.card || entry;
+      cards.set(entry.index ?? i, { spec, card: { el: null } });
+    });
+    return true;
+  }
+
+  async function initSession() {
+    const stored = sessionStorage.getItem(SESSION_KEY);
+    if (stored && (await hydrateFromServer(stored))) return;
+    await ensureSession();
+  }
+
+  async function apiSnooze(title, glyph, agent) {
+    await ensureSession();
+    const id = agent || title;
+    await fetch(`/api/agents/${encodeURIComponent(id)}/snooze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, title, glyph, agent: id }),
+    });
+  }
+
+  async function apiWake(id, spec) {
+    await ensureSession();
+    await fetch(`/api/agents/${encodeURIComponent(id)}/wake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        title: spec.title,
+        glyph: spec.glyph,
+        agent: spec.agent || id,
+      }),
+    });
+  }
+
+  async function apiCommit(cardTitle, actionLabel) {
+    await ensureSession();
+    await fetch(`/api/sessions/${sessionId}/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_title: cardTitle, action_label: actionLabel }),
+    });
+  }
+
+  function wirePersistence() {
+    if (ui.snoozeAgent) {
+      const orig = ui.snoozeAgent;
+      ui.snoozeAgent = function (title) {
+        const card = [...document.querySelectorAll('.card')].find(
+          (c) => c.dataset.title === title
+        );
+        const glyph = card?.querySelector('.glyph')?.textContent || '💤';
+        apiSnooze(title, glyph, title).catch(() => {});
+        return orig(title);
+      };
+    }
+    if (ui.wakeAgent) {
+      const orig = ui.wakeAgent;
+      ui.wakeAgent = function (id, spec) {
+        apiWake(id, spec).catch(() => {});
+        return orig(id, spec);
+      };
+    }
+    if (ui.commitAction) {
+      const orig = ui.commitAction;
+      ui.commitAction = function (cardEl, btn, label) {
+        const title = cardEl?.dataset?.title || '';
+        apiCommit(title, label).catch(() => {});
+        return orig(cardEl, btn, label);
+      };
+    }
   }
 
   function beginScenario(key, text, totalCards) {
@@ -237,6 +336,9 @@
     }
   }
 
-  loadGreeting();
-  console.info('[zavora] live mode — SSE orchestration enabled');
+  wirePersistence();
+  initSession()
+    .then(() => loadGreeting())
+    .catch(() => loadGreeting());
+  console.info('[zavora] live mode — SSE orchestration + persistence enabled');
 })();

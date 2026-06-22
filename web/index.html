@@ -1581,6 +1581,54 @@ function wakeAgent(id, spec){
   agentActive(spec);
 }
 
+function hydrateField(payload){
+  const { scenario, origin_text, cards } = payload;
+  if (!cards?.length) return;
+  if (scenario) {
+    currentKey = scenario;
+    setTotalCards(cards.length);
+    originText.textContent = origin_text || '';
+    origin.classList.add('show');
+    chips.classList.add('hide');
+  }
+  cardsEl.innerHTML = '';
+  resetAgents();
+  cards.forEach((entry) => {
+    const spec = entry.card || entry;
+    const built = buildCard(spec);
+    built.el.dataset.title = spec.title || '';
+    cardsEl.appendChild(built.el);
+    if (entry.resolve) {
+      resolve(built, Object.assign({}, spec, { resolve: entry.resolve }), null);
+    } else {
+      agentActive(spec);
+    }
+    if (entry.pinned) built.el.classList.add('pinned');
+  });
+}
+
+function hydrateAgents(payload){
+  if (!payload) return;
+  resetAgents();
+  (payload.active || []).forEach((a) =>
+    agentActive({ title: a.title, glyph: a.glyph || '✦', agent: a.agent || a.id })
+  );
+  (payload.resting || []).forEach((a) => {
+    const id = a.id || a.agent || a.title;
+    const spec = { title: a.title, glyph: a.glyph || '💤', agent: a.agent || id };
+    clearEmpty(restingEl);
+    const t = document.createElement('div');
+    t.className = 'tile resting';
+    t.dataset.id = id;
+    t.innerHTML = `<div class="av">${spec.glyph}</div><div class="who">${spec.title}<small>snoozed</small></div><span class="zzz">z</span>`;
+    t.addEventListener('click', () => wakeAgent(id, spec));
+    restingEl.appendChild(t);
+    resting.set(id, spec);
+  });
+  emptyMsg(activeEl, 'None running');
+  emptyMsg(restingEl, 'Nothing snoozed');
+}
+
 // ---------- ambient jazz (generated, no asset file) ----------
 let jazz = null;
 function startJazz(){
@@ -1901,6 +1949,12 @@ window.__ZAVORA_UI__ = {
   exitFlow,
   resetAgents,
   agentActive,
+  snoozeAgent,
+  wakeAgent,
+  commitAction,
+  fling,
+  hydrateField,
+  hydrateAgents,
   conductAction,
   conductFuse,
   finishDeck,

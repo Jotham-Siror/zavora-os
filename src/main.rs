@@ -119,6 +119,26 @@ async fn main() -> anyhow::Result<()> {
             "/api/sessions/{session_id}/fuse",
             post(routes::fuse::fuse_cards),
         )
+        .route(
+            "/api/sessions/{session_id}/cards",
+            get(routes::cards::list_cards),
+        )
+        .route(
+            "/api/sessions/{session_id}/agents",
+            get(routes::agents::list_agents),
+        )
+        .route(
+            "/api/sessions/{session_id}/commit",
+            post(routes::commit::commit_action),
+        )
+        .route(
+            "/api/agents/{agent_id}/snooze",
+            post(routes::agents::snooze_agent),
+        )
+        .route(
+            "/api/agents/{agent_id}/wake",
+            post(routes::agents::wake_agent),
+        )
         .with_state(app_state)
         .merge(awp_router(awp_state))
         .layer(CorsLayer::very_permissive());

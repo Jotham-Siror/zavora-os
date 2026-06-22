@@ -10,6 +10,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
+use crate::orchestrator::persist;
 use crate::state::SessionStore;
 
 fn morning_cards() -> Vec<serde_json::Value> {
@@ -156,11 +157,12 @@ pub fn stream_morning(
     let (tx, rx) = mpsc::channel(128);
 
     tokio::spawn(async move {
-        if let Some(ref store) = sessions {
-            store.set_scenario(&session_id, "morning").await;
-        }
-
         let cards = morning_cards();
+        if let Some(ref store) = sessions {
+            store
+                .set_scenario(&session_id, "morning", Some(&intent))
+                .await;
+        }
         let _ = tx
             .send(Ok(to_event(&FieldEvent::Scenario {
                 key: "morning".into(),
@@ -170,6 +172,9 @@ pub fn stream_morning(
             .await;
 
         for (index, card) in cards.iter().enumerate() {
+            if let Some(ref store) = sessions {
+                persist::card_spawn(store, &session_id, index, card.clone()).await;
+            }
             let _ = tx
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
@@ -278,6 +283,18 @@ pub fn stream_morning(
                     &tool_buf[index],
                     &agent_buf[index],
                 );
+                if let Some(ref store) = sessions {
+                    let card = cards.get(index).cloned().unwrap_or_default();
+                    persist::card_resolve(
+                        store,
+                        &session_id,
+                        index,
+                        card,
+                        resolve.clone(),
+                        false,
+                    )
+                    .await;
+                }
                 let _ = tx
                     .send(Ok(to_event(&FieldEvent::CardResolve { index, resolve })))
                     .await;
@@ -294,6 +311,18 @@ pub fn stream_morning(
                 continue;
             }
             let resolve = resolve_for_agent(author, &tool_buf[index], &agent_buf[index]);
+            if let Some(ref store) = sessions {
+                let card = cards.get(index).cloned().unwrap_or_default();
+                persist::card_resolve(
+                    store,
+                    &session_id,
+                    index,
+                    card,
+                    resolve.clone(),
+                    false,
+                )
+                .await;
+            }
             let _ = tx
                 .send(Ok(to_event(&FieldEvent::CardResolve { index, resolve })))
                 .await;

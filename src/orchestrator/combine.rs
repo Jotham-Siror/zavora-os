@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::sse::{to_event, ConductStep, FieldEvent};
+use crate::orchestrator::persist;
 use crate::state::{SessionArtifacts, SessionStore};
 
 fn deck_conduct_steps() -> Vec<ConductStep> {
@@ -271,14 +272,34 @@ pub fn stream_combine(
             .as_ref()
             .and_then(|p| artifact_url(&session_id, p, &artifact_root));
 
-        let _ = tx
-            .send(Ok(to_event(&FieldEvent::DeckFinish {
-                big: "Deck ready".into(),
-                sub,
-                artifact_url: url.clone(),
-                slide_count: Some(slide_count),
-            })))
-            .await;
+        let deck_finish = FieldEvent::DeckFinish {
+            big: "Deck ready".into(),
+            sub: sub.clone(),
+            artifact_url: url.clone(),
+            slide_count: Some(slide_count),
+        };
+        let _ = tx.send(Ok(to_event(&deck_finish))).await;
+
+        let slides_card = serde_json::json!({
+            "glyph":"🖼️","title":"Auto-Slides","agent":"auto-slides","surface":"slides"
+        });
+        let mut pinned_resolve = serde_json::json!({
+            "big": "Deck ready",
+            "sub": sub,
+            "actions": ["Save deck", "Present"],
+        });
+        if let Some(ref u) = url {
+            pinned_resolve["artifact_url"] = serde_json::Value::String(u.clone());
+        }
+        persist::card_resolve(
+            &sessions,
+            &session_id,
+            2,
+            slides_card,
+            pinned_resolve,
+            true,
+        )
+        .await;
 
         if let Some(path) = combined_path {
             let mut updated = collect_artifacts(&session_dir);

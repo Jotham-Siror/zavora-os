@@ -58,6 +58,41 @@ method = "GET"
 access_level = "anonymous"
 
 [[capabilities]]
+name = "list_cards"
+description = "Hydrate field cards after refresh"
+endpoint = "/api/sessions/{session_id}/cards"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
+name = "list_agents"
+description = "Hydrate agent rails after refresh"
+endpoint = "/api/sessions/{session_id}/agents"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
+name = "snooze_agent"
+description = "Snooze an agent to the Resting rail"
+endpoint = "/api/agents/{agent_id}/snooze"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "wake_agent"
+description = "Wake an agent from Resting to Active"
+endpoint = "/api/agents/{agent_id}/wake"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "commit_action"
+description = "Execute a card primary action (draft, save, book, …)"
+endpoint = "/api/sessions/{session_id}/commit"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
 name = "start_morning"
 description = "Start my day — parallel calendar+inbox then brief via MCP agents"
 endpoint = "/api/sessions/{session_id}/intent"

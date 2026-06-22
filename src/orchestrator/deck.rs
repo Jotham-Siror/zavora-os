@@ -11,6 +11,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
+use crate::orchestrator::persist;
 use crate::state::{SessionArtifacts, SessionStore};
 
 fn deck_cards() -> Vec<serde_json::Value> {
@@ -146,11 +147,13 @@ pub fn stream_deck(
             return;
         }
 
+        let cards = deck_cards();
         if let Some(ref store) = sessions {
-            store.set_scenario(&session_id, "deck").await;
+            store
+                .set_scenario(&session_id, "deck", Some(&intent))
+                .await;
         }
 
-        let cards = deck_cards();
         let _ = tx
             .send(Ok(to_event(&FieldEvent::Scenario {
                 key: "deck".into(),
@@ -160,6 +163,9 @@ pub fn stream_deck(
             .await;
 
         for (index, card) in cards.iter().enumerate() {
+            if let Some(ref store) = sessions {
+                persist::card_spawn(store, &session_id, index, card.clone()).await;
+            }
             let _ = tx
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
@@ -285,6 +291,18 @@ pub fn stream_deck(
                                     if let Some(url) = url {
                                         resolve["artifact_url"] = serde_json::Value::String(url);
                                     }
+                                    if let Some(ref store) = sessions {
+                                        let card = cards.get(index).cloned().unwrap_or_default();
+                                        persist::card_resolve(
+                                            store,
+                                            &session_id,
+                                            index,
+                                            card,
+                                            resolve.clone(),
+                                            false,
+                                        )
+                                        .await;
+                                    }
                                     let _ = tx
                                         .send(Ok(to_event(&FieldEvent::CardResolve {
                                             index,
@@ -316,6 +334,18 @@ pub fn stream_deck(
                 });
                 if let Some(url) = url {
                     resolve["artifact_url"] = serde_json::Value::String(url);
+                }
+                if let Some(ref store) = sessions {
+                    let card = cards.get(index).cloned().unwrap_or_default();
+                    persist::card_resolve(
+                        store,
+                        &session_id,
+                        index,
+                        card,
+                        resolve.clone(),
+                        false,
+                    )
+                    .await;
                 }
                 let _ = tx
                     .send(Ok(to_event(&FieldEvent::CardResolve { index, resolve })))

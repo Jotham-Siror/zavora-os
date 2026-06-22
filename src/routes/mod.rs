@@ -1,4 +1,7 @@
 pub mod action;
+pub mod agents;
+pub mod cards;
+pub mod commit;
 pub mod fuse;
 pub mod greeting;
 pub mod health;

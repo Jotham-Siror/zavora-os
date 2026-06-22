@@ -14,8 +14,8 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 | M0 Live shell | `milestone/M0-live-shell` | ✅ done | `v0.0.1-m0` |
 | M1 Real deck | `milestone/M1-deck` | ✅ done | `v0.1.0-m1` |
 | M2 Combine | `milestone/M2-combine` | ✅ done | `v0.2.0-m2` |
-| M3 Morning | `milestone/M3-morning` | 🟡 In progress | `v0.3.0-m3` |
-| M4 Persistence | `milestone/M4-persistence` | ⬜ | `v0.4.0-m4` |
+| M3 Morning | `milestone/M3-morning` | ✅ done | `v0.3.0-m3` |
+| M4 Persistence | `milestone/M4-persistence` | 🟡 In progress | `v0.4.0-m4` |
 | M5 Suzy + router | `milestone/M5-coordinator` | ⬜ | `v0.5.0-m5` |
 | M6 Scenarios | `milestone/M6-scenarios` | ⬜ | `v0.6.0-m6` |
 | M7 Proactive | `milestone/M7-proactive` | ⬜ | `v0.7.0-m7` |
@@ -178,13 +178,13 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Tasks
 
-- [ ] **M4-T1** Session state: `app:cards`, `app:agents:active`, `app:agents:resting`
-- [ ] **M4-T2** `GET /api/sessions/{sid}/cards` — hydrate field on load
-- [ ] **M4-T3** `GET /api/sessions/{sid}/agents` — hydrate rails
-- [ ] **M4-T4** `POST /api/agents/{id}/snooze`
-- [ ] **M4-T5** `POST /api/agents/{id}/wake`
-- [ ] **M4-T6** `POST /api/sessions/{sid}/commit` — label → tool call (e.g. `send_draft`)
-- [ ] **M4-T7** `field-client.js` — call snooze/wake/commit APIs instead of local-only
+- [x] **M4-T1** Session state: `app:cards`, `app:agents:active`, `app:agents:resting`
+- [x] **M4-T2** `GET /api/sessions/{sid}/cards` — hydrate field on load
+- [x] **M4-T3** `GET /api/sessions/{sid}/agents` — hydrate rails
+- [x] **M4-T4** `POST /api/agents/{id}/snooze`
+- [x] **M4-T5** `POST /api/agents/{id}/wake`
+- [x] **M4-T6** `POST /api/sessions/{sid}/commit` — label → tool call (e.g. `send_draft`)
+- [x] **M4-T7** `field-client.js` — call snooze/wake/commit APIs instead of local-only
 
 ### Validation
 
@@ -194,9 +194,9 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Commits
 
-- [ ] `feat(state): card and agent rail persistence`
-- [ ] `feat(api): snooze wake commit`
-- [ ] `feat(ui): hydrate on load`
+- [x] `feat(state): card and agent rail persistence`
+- [x] `feat(api): snooze wake commit`
+- [x] `feat(ui): hydrate on load`
 
 ---
 
