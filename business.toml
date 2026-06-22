@@ -51,6 +51,20 @@ method = "POST"
 access_level = "known"
 
 [[capabilities]]
+name = "get_greeting"
+description = "Personalized greeting from calendar when connected; static brand voice otherwise"
+endpoint = "/api/greeting"
+method = "GET"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "start_morning"
+description = "Start my day — parallel calendar+inbox then brief via MCP agents"
+endpoint = "/api/sessions/{session_id}/intent"
+method = "POST"
+access_level = "anonymous"
+
+[[capabilities]]
 name = "fuse_cards"
 description = "Fuse one card into another — server-driven conduct gesture"
 endpoint = "/api/sessions/{session_id}/fuse"

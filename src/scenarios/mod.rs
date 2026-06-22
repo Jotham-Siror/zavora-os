@@ -40,9 +40,10 @@ pub fn pick_action(text: &str) -> Option<&'static str> {
 }
 
 /// Whether an intent scenario should use the live orchestrator.
-pub fn intent_is_live(scenario: &str, deck_enabled: bool) -> bool {
+pub fn intent_is_live(scenario: &str, deck_enabled: bool, morning_enabled: bool) -> bool {
     match scenario {
         "deck" => deck_enabled,
+        "morning" => morning_enabled,
         _ => false,
     }
 }
@@ -86,5 +87,12 @@ mod tests {
         assert!(action_is_live("combine", Some("deck"), true));
         assert!(!action_is_live("combine", Some("deck"), false));
         assert!(!action_is_live("combine", Some("morning"), true));
+    }
+
+    #[test]
+    fn morning_intent_is_live_when_enabled() {
+        assert!(intent_is_live("morning", false, true));
+        assert!(!intent_is_live("morning", false, false));
+        assert!(intent_is_live("deck", true, false));
     }
 }

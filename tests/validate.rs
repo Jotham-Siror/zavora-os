@@ -96,8 +96,9 @@ fn combine_action_routing_is_live_for_deck() {
     assert_eq!(scenarios::pick_action("combine"), Some("combine"));
     assert!(scenarios::action_is_live("combine", Some("deck"), true));
     assert!(!scenarios::action_is_live("combine", Some("morning"), true));
-    assert!(!scenarios::intent_is_live("morning", true));
-    assert!(scenarios::intent_is_live("deck", true));
+    assert!(!scenarios::intent_is_live("morning", true, false));
+    assert!(scenarios::intent_is_live("deck", true, false));
+    assert!(scenarios::intent_is_live("morning", false, true));
 }
 
 #[tokio::test]
@@ -120,6 +121,41 @@ async fn mock_combine_action_stream_completes_with_events() {
         result >= 3,
         "deck combine mock should emit conduct + deck_finish + done, got {result}"
     );
+}
+
+#[tokio::test]
+async fn morning_phase_b_mcp_spawn() {
+    let paths = common::mcp_paths();
+    assert!(paths.news.exists(), "build mcp-news: cd mcp-servers/mcp-news && cargo build --release");
+    assert!(
+        paths.weather.exists(),
+        "build mcp-weather: cd mcp-servers/mcp-weather && cargo build --release"
+    );
+
+    let news = mcp::spawn_mcp_server(&paths.news).await.expect("news");
+    let weather = mcp::spawn_mcp_server(&paths.weather).await.expect("weather");
+    assert!(mcp::health_check(&news).await.expect("news health") > 5);
+    assert!(mcp::health_check(&weather).await.expect("weather health") > 3);
+}
+
+#[tokio::test]
+async fn morning_workflow_builds_with_news_and_weather() {
+    let api_key = common::google_api_key();
+    let paths = common::mcp_paths();
+
+    let news = Arc::new(mcp::spawn_mcp_server(&paths.news).await.unwrap());
+    let weather = Arc::new(mcp::spawn_mcp_server(&paths.weather).await.unwrap());
+
+    let pool = spatial_os::agents::morning::MorningMcpPool {
+        calendar: None,
+        email: None,
+        news,
+        weather,
+    };
+
+    spatial_os::agents::morning::build_workflow(&api_key, &common::gemini_model(), &pool)
+        .await
+        .expect("morning workflow should build");
 }
 
 #[tokio::test]

@@ -13,8 +13,8 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 |-----------|--------|--------|-----|
 | M0 Live shell | `milestone/M0-live-shell` | ✅ done | `v0.0.1-m0` |
 | M1 Real deck | `milestone/M1-deck` | ✅ done | `v0.1.0-m1` |
-| M2 Combine | `milestone/M2-combine` | 🟡 In progress | `v0.2.0-m2` |
-| M3 Morning | `milestone/M3-morning` | ⬜ | `v0.3.0-m3` |
+| M2 Combine | `milestone/M2-combine` | ✅ done | `v0.2.0-m2` |
+| M3 Morning | `milestone/M3-morning` | 🟡 In progress | `v0.3.0-m3` |
 | M4 Persistence | `milestone/M4-persistence` | ⬜ | `v0.4.0-m4` |
 | M5 Suzy + router | `milestone/M5-coordinator` | ⬜ | `v0.5.0-m5` |
 | M6 Scenarios | `milestone/M6-scenarios` | ⬜ | `v0.6.0-m6` |
@@ -148,14 +148,14 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Tasks
 
-- [ ] **M3-T1** Boot Phase B MCP servers
-- [ ] **M3-T2** `MorningWorkflow` — parallel calendar + inbox → sequential brief
-- [ ] **M3-T3** `calendar_agent` — `get_today`, `list_events`, `find_free_time`
-- [ ] **M3-T4** `inbox_agent` — `list_inbox`, `search_emails`, `create_draft`
-- [ ] **M3-T5** `brief_agent` — `gnews_top_headlines` + `get_forecast`
-- [ ] **M3-T6** `GET /api/greeting` — personalized text from calendar
-- [ ] **M3-T7** OAuth flow for Google (calendar + email)
-- [ ] **M3-T8** `business.toml` — `get_greeting` capability
+- [x] **M3-T1** Boot Phase B MCP servers
+- [x] **M3-T2** `MorningWorkflow` — parallel calendar + inbox → sequential brief
+- [x] **M3-T3** `calendar_agent` — `get_today`, `list_events`, `find_free_time`
+- [x] **M3-T4** `inbox_agent` — `list_inbox`, `search_emails`, `create_draft`
+- [x] **M3-T5** `brief_agent` — `gnews_top_headlines` + `get_forecast`
+- [x] **M3-T6** `GET /api/greeting` — personalized text from calendar
+- [x] **M3-T7** OAuth flow for Google (calendar + email)
+- [x] **M3-T8** `business.toml` — `get_greeting` capability
 
 ### Validation
 
@@ -166,9 +166,9 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 
 ### Commits
 
-- [ ] `feat(mcp): phase B calendar email news weather`
-- [ ] `feat(agents): morning workflow`
-- [ ] `feat(api): personalized greeting`
+- [x] `feat(mcp): phase B calendar email news weather`
+- [x] `feat(agents): morning workflow`
+- [x] `feat(api): personalized greeting`
 
 ---
 

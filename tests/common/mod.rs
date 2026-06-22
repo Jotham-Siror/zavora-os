@@ -14,6 +14,8 @@ pub struct McpPaths {
     pub worksheet: PathBuf,
     pub docx: PathBuf,
     pub slides: PathBuf,
+    pub news: PathBuf,
+    pub weather: PathBuf,
 }
 
 pub fn mcp_paths() -> McpPaths {
@@ -22,6 +24,8 @@ pub fn mcp_paths() -> McpPaths {
         worksheet: m.join("../mcp-servers/worksheet-mcp/target/release/excel-mcp-server"),
         docx: m.join("../mcp-servers/docx-mcp/target/release/docx-mcp-server"),
         slides: m.join("../mcp-servers/mcp_slides/target/release/slides-mcp-server"),
+        news: m.join("../mcp-servers/mcp-news/target/release/mcp-news"),
+        weather: m.join("../mcp-servers/mcp-weather/target/release/mcp-weather"),
     }
 }
 
@@ -30,6 +34,8 @@ pub fn assert_mcp_binaries_exist(paths: &McpPaths) {
         ("worksheet", &paths.worksheet),
         ("docx", &paths.docx),
         ("slides", &paths.slides),
+        ("news", &paths.news),
+        ("weather", &paths.weather),
     ] {
         assert!(
             path.exists(),

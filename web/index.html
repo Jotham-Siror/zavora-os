@@ -1663,7 +1663,7 @@ function tickClock(){
   const t = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   clockEl.textContent = t; clock2.textContent = t;
 }
-const GREETING_LINE = "Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon.";
+let GREETING_LINE = "Good morning. Here's your day — three meetings, two emails that need you, and a free window at noon.";
 const greetCC = document.getElementById('greetCC');
 let greetingPlayed = false, greetingBusy = false;
 async function playGreeting(){
@@ -1902,6 +1902,7 @@ window.__ZAVORA_UI__ = {
   finishDeck,
   hand,
   wait,
+  setGreetingLine(text) { GREETING_LINE = text; },
   legacySubmit: __legacySubmitIntent,
   clearSuggestion() {
     clearTimeout(suggestTimer);

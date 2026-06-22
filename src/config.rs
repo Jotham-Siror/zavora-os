@@ -14,6 +14,10 @@ pub struct AppConfig {
     pub mcp_worksheet_path: PathBuf,
     pub mcp_docx_path: PathBuf,
     pub mcp_slides_path: PathBuf,
+    pub mcp_calendar_path: PathBuf,
+    pub mcp_email_path: PathBuf,
+    pub mcp_news_path: PathBuf,
+    pub mcp_weather_path: PathBuf,
     pub google_api_key: Option<String>,
     pub gemini_model: String,
 }
@@ -51,6 +55,26 @@ impl AppConfig {
                 "MCP_SLIDES_PATH",
                 "../mcp-servers/mcp_slides/target/release/slides-mcp-server",
             ),
+            mcp_calendar_path: resolve_path(
+                &manifest_dir,
+                "MCP_CALENDAR_PATH",
+                "../mcp-servers/mcp-calendar/target/release/mcp-calendar",
+            ),
+            mcp_email_path: resolve_path(
+                &manifest_dir,
+                "MCP_EMAIL_PATH",
+                "../mcp-servers/mcp-email/target/release/mcp-email",
+            ),
+            mcp_news_path: resolve_path(
+                &manifest_dir,
+                "MCP_NEWS_PATH",
+                "../mcp-servers/mcp-news/target/release/mcp-news",
+            ),
+            mcp_weather_path: resolve_path(
+                &manifest_dir,
+                "MCP_WEATHER_PATH",
+                "../mcp-servers/mcp-weather/target/release/mcp-weather",
+            ),
             google_api_key: std::env::var("GOOGLE_API_KEY").ok().filter(|k| !k.is_empty()),
             gemini_model: std::env::var("GEMINI_MODEL")
                 .unwrap_or_else(|_| "gemini-3.1-flash-lite".into()),
@@ -63,6 +87,10 @@ impl AppConfig {
 
     pub fn deck_enabled(&self) -> bool {
         self.google_api_key.is_some()
+    }
+
+    pub fn agents_enabled(&self) -> bool {
+        self.deck_enabled()
     }
 }
 

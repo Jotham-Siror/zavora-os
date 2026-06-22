@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use crate::agents::morning::MorningMcpPool;
 
 #[derive(Clone, Debug, Default)]
 pub struct SessionArtifacts {
@@ -73,29 +74,39 @@ pub struct AppState {
     pub sessions: SessionStore,
     pub deck_runner: Option<Arc<Runner>>,
     pub combine_runner: Option<Arc<Runner>>,
+    pub morning_runner: Option<Arc<Runner>>,
     pub session_service: Arc<InMemorySessionService>,
     pub artifact_dir: PathBuf,
     pub deck_enabled: bool,
-    pub mcp_pool: Option<Arc<McpPool>>,
+    pub morning_enabled: bool,
+    pub deck_mcp: Option<Arc<McpPool>>,
+    pub morning_mcp: Option<Arc<MorningMcpPool>>,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         artifact_dir: PathBuf,
         deck_enabled: bool,
+        morning_enabled: bool,
         deck_runner: Option<Arc<Runner>>,
         combine_runner: Option<Arc<Runner>>,
+        morning_runner: Option<Arc<Runner>>,
         session_service: Arc<InMemorySessionService>,
-        mcp_pool: Option<Arc<McpPool>>,
+        deck_mcp: Option<Arc<McpPool>>,
+        morning_mcp: Option<Arc<MorningMcpPool>>,
     ) -> Self {
         Self {
             sessions: SessionStore::new(),
             deck_runner,
             combine_runner,
+            morning_runner,
             session_service,
             artifact_dir,
             deck_enabled,
-            mcp_pool,
+            morning_enabled,
+            deck_mcp,
+            morning_mcp,
         }
     }
 }

@@ -1,4 +1,5 @@
 use spatial_os::agents::deck::{self, McpPool};
+use spatial_os::agents::morning::{self, MorningMcpPool};
 use spatial_os::config::AppConfig;
 use spatial_os::routes;
 use spatial_os::state::AppState;
@@ -34,29 +35,56 @@ async fn main() -> anyhow::Result<()> {
 
     let session_service = Arc::new(InMemorySessionService::new());
 
-    let (deck_runner, combine_runner, mcp_pool, deck_enabled) = if config.deck_enabled() {
+    let mut deck_runner = None;
+    let mut combine_runner = None;
+    let mut deck_mcp = None;
+    let mut deck_enabled = false;
+
+    if config.agents_enabled() {
         match boot_deck_stack(&config, session_service.clone()).await {
-            Ok((deck_runner, combine_runner, pool)) => {
+            Ok((deck, combine, pool)) => {
                 tracing::info!("Deck + combine workflows enabled (MCP + Gemini)");
-                (Some(deck_runner), Some(combine_runner), Some(pool), true)
+                deck_runner = Some(deck);
+                combine_runner = Some(combine);
+                deck_mcp = Some(pool);
+                deck_enabled = true;
             }
             Err(e) => {
-                tracing::warn!("Deck workflow unavailable ({e:#}) — mock scenarios only");
-                (None, None, None, false)
+                tracing::warn!("Deck workflow unavailable ({e:#}) — deck stays mock");
             }
         }
     } else {
         tracing::warn!("GOOGLE_API_KEY not set — deck uses mock SSE");
-        (None, None, None, false)
-    };
+    }
+
+    let mut morning_runner = None;
+    let mut morning_mcp = None;
+    let mut morning_enabled = false;
+
+    if config.agents_enabled() {
+        match boot_morning_stack(&config, session_service.clone()).await {
+            Ok((runner, pool)) => {
+                tracing::info!("Morning workflow enabled (news + weather MCP + Gemini)");
+                morning_runner = Some(runner);
+                morning_mcp = Some(pool);
+                morning_enabled = true;
+            }
+            Err(e) => {
+                tracing::warn!("Morning workflow unavailable ({e:#}) — morning stays mock");
+            }
+        }
+    }
 
     let app_state = AppState::new(
         config.artifact_dir.clone(),
         deck_enabled,
+        morning_enabled,
         deck_runner,
         combine_runner,
+        morning_runner,
         session_service,
-        mcp_pool,
+        deck_mcp,
+        morning_mcp,
     );
     let session_store = app_state.sessions.clone();
 
@@ -76,6 +104,8 @@ async fn main() -> anyhow::Result<()> {
 
     let api = Router::new()
         .route("/health", get(routes::health::health))
+        .route("/api/greeting", get(routes::greeting::get_greeting))
+        .route("/api/oauth/{provider}", get(routes::oauth::oauth_guide))
         .route("/api/sessions", post(routes::session::create_session))
         .route(
             "/api/sessions/{session_id}/intent",
@@ -130,7 +160,7 @@ async fn boot_deck_stack(
     let api_key = config
         .google_api_key
         .as_deref()
-        .expect("deck_enabled implies API key");
+        .expect("agents_enabled implies API key");
 
     let worksheet = tools::mcp::spawn_mcp_server(&config.mcp_worksheet_path).await?;
     let docx = tools::mcp::spawn_mcp_server(&config.mcp_docx_path).await?;
@@ -169,6 +199,61 @@ async fn boot_deck_stack(
     );
 
     Ok((deck_runner, combine_runner, pool))
+}
+
+async fn boot_morning_stack(
+    config: &AppConfig,
+    session_service: Arc<InMemorySessionService>,
+) -> anyhow::Result<(Arc<Runner>, Arc<MorningMcpPool>)> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+
+    let news = tools::mcp::spawn_mcp_server(&config.mcp_news_path).await?;
+    let weather = tools::mcp::spawn_mcp_server(&config.mcp_weather_path).await?;
+    let n = tools::mcp::health_check(&news).await?;
+    let w = tools::mcp::health_check(&weather).await?;
+    tracing::info!("Morning MCP ready: news={n}, weather={w}");
+
+    let calendar = tools::mcp::try_spawn_mcp_server(&config.mcp_calendar_path)
+        .await
+        .map(|t| {
+            tracing::info!("Calendar MCP connected");
+            Arc::new(t) as Arc<dyn adk_core::Toolset>
+        });
+    let email = tools::mcp::try_spawn_mcp_server(&config.mcp_email_path)
+        .await
+        .map(|t| {
+            tracing::info!("Email MCP connected");
+            Arc::new(t) as Arc<dyn adk_core::Toolset>
+        });
+
+    if calendar.is_none() {
+        tracing::warn!("Calendar MCP unavailable — Today card uses brief context only");
+    }
+    if email.is_none() {
+        tracing::warn!("Email MCP unavailable — set SMTP/IMAP or run mcp-email auth gmail");
+    }
+
+    let pool = Arc::new(MorningMcpPool {
+        calendar,
+        email,
+        news: Arc::new(news),
+        weather: Arc::new(weather),
+    });
+
+    let workflow = morning::build_workflow(api_key, &config.gemini_model, pool.as_ref()).await?;
+
+    let runner = Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-morning")
+            .agent(workflow)
+            .session_service(session_service)
+            .build()?,
+    );
+
+    Ok((runner, pool))
 }
 
 fn awp_router(state: AwpState) -> Router {

@@ -3,7 +3,7 @@ use axum::response::{IntoResponse, Response};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::events::mock;
-use crate::orchestrator::{combine, deck};
+use crate::orchestrator::{combine, deck, morning};
 use crate::scenarios;
 use crate::state::AppState;
 
@@ -26,25 +26,50 @@ pub struct ActionDispatch<'a> {
 pub fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
     let scenario = scenarios::pick_scenario(&req.text);
 
-    if scenarios::intent_is_live(scenario, req.state.deck_enabled) {
-        if scenario == "deck" {
-            if let Some(runner) = req.state.deck_runner.clone() {
-                let session_id = req.session_id.clone();
-                let user_id = req.user_id.clone();
-                let text = req.text.clone();
-                let artifact_dir = req.state.artifact_dir.clone();
-                let sessions = req.state.sessions.clone();
-
-                return Sse::new(deck::stream_deck(
-                    runner,
-                    user_id,
-                    session_id.clone(),
-                    text,
-                    artifact_dir,
-                    Some(sessions),
-                ))
-                .into_response();
+    if scenarios::intent_is_live(
+        scenario,
+        req.state.deck_enabled,
+        req.state.morning_enabled,
+    ) {
+        match scenario {
+            "deck" => {
+                if let Some(runner) = req.state.deck_runner.clone() {
+                    return Sse::new(deck::stream_deck(
+                        runner,
+                        req.user_id,
+                        req.session_id,
+                        req.text,
+                        req.state.artifact_dir.clone(),
+                        Some(req.state.sessions.clone()),
+                    ))
+                    .into_response();
+                }
             }
+            "morning" => {
+                if let Some(runner) = req.state.morning_runner.clone() {
+                    let has_calendar = req
+                        .state
+                        .morning_mcp
+                        .as_ref()
+                        .is_some_and(|p| p.calendar.is_some());
+                    let has_inbox = req
+                        .state
+                        .morning_mcp
+                        .as_ref()
+                        .is_some_and(|p| p.email.is_some());
+                    return Sse::new(morning::stream_morning(
+                        runner,
+                        req.user_id,
+                        req.session_id,
+                        req.text,
+                        Some(req.state.sessions.clone()),
+                        has_calendar,
+                        has_inbox,
+                    ))
+                    .into_response();
+                }
+            }
+            _ => {}
         }
     }
 
