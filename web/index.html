@@ -331,6 +331,8 @@
   .ea-card input:focus { border-color: rgba(124,92,255,.55); box-shadow: 0 0 0 3px rgba(124,92,255,.14); }
   .ea-card .btn.primary { padding: 13px; font-size: 14px; }
   .ea-fine { margin: 14px 0 0 !important; font-size: 11.5px !important; color: rgba(154,164,196,.6) !important; }
+  .ea-fine a { color: rgba(124,92,255,.85); text-decoration: none; border-bottom: 1px solid rgba(124,92,255,.25); }
+  .ea-fine a:hover { color: #a78bfa; }
   .ea-done { display: none; text-align: center; }
   .ea-done.show { display: block; }
   .ea-form-hide { display: none !important; }
@@ -697,7 +699,9 @@
         <input id="eaEmail" type="email" required placeholder="you@email.com" autocomplete="email" />
         <button type="submit" class="btn primary">Reserve my spot →</button>
       </form>
-      <p class="ea-fine">The first 500 get in on June 30. No spam — one email when your spot opens.</p>
+      <p class="ea-fine">The first 500 get in on June 30. No spam — one email when your spot opens.
+        Agents: <a href="/.well-known/awp.json" target="_blank" rel="noopener">AWP discovery</a> ·
+        <a href="/awp/manifest" target="_blank" rel="noopener">capability manifest</a>.</p>
       <div class="ea-done" id="eaDone">
         <div class="ea-check">✓</div>
         <h3>You're on the list.</h3>

@@ -43,10 +43,14 @@ reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
 
 [dev-dependencies]
+adk-awp = { path = "../adk-rust/adk-awp" }
 adk-core = { path = "../adk-rust/adk-core" }
 adk-session = { path = "../adk-rust/adk-session" }
+awp-types = { path = "../adk-rust/awp-types" }
 futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
 uuid = { version = "1", features = ["v4"] }
 dotenvy = "0.15"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }

@@ -1,0 +1,13 @@
+# TLS reverse proxy for Zavora OS.
+# Set DOMAIN in deploy/.env (e.g. os.zavora.example).
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	@voice path /ws/*
+	handle @voice {
+		reverse_proxy app:9847
+	}
+
+	reverse_proxy app:9847
+}

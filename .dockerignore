@@ -1,0 +1,8 @@
+target
+.git
+.env
+artifacts
+demo
+node_modules
+*.iso
+.DS_Store

@@ -356,6 +356,111 @@ fn voice_state_boots_when_api_key_present() {
     }
 }
 
+fn awp_test_state() -> adk_awp::AwpState {
+    use adk_awp::{
+        AwpState, BusinessContextLoader, DefaultTrustAssigner, HealthStateMachine,
+        InMemoryConsentService, InMemoryEventSubscriptionService, InMemoryRateLimiter,
+    };
+    use std::sync::Arc;
+
+    let path = common::manifest_dir().join("business.toml");
+    let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
+    let event_service = Arc::new(InMemoryEventSubscriptionService::new());
+    AwpState {
+        business_context: loader.context_ref(),
+        rate_limiter: Arc::new(InMemoryRateLimiter::new()),
+        consent_service: Arc::new(InMemoryConsentService::new()),
+        event_service: event_service.clone(),
+        health: Arc::new(HealthStateMachine::new(event_service)),
+        trust_assigner: Arc::new(DefaultTrustAssigner),
+    }
+}
+
+#[tokio::test]
+async fn awp_discovery_document_valid() {
+    use adk_awp::awp_routes;
+    use awp_types::{AwpDiscoveryDocument, CURRENT_VERSION};
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let app = awp_routes(awp_test_state());
+    let response = app
+        .oneshot(Request::get("/.well-known/awp.json").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), 16_384)
+        .await
+        .unwrap();
+    let doc: AwpDiscoveryDocument = serde_json::from_slice(&body).unwrap();
+    assert_eq!(doc.version, CURRENT_VERSION);
+    assert!(doc.capability_manifest_url.contains("/awp/manifest"));
+    assert!(doc.a2a_endpoint_url.contains("/awp/a2a"));
+}
+
+#[tokio::test]
+async fn awp_manifest_lists_submit_intent() {
+    use adk_awp::awp_routes;
+    use awp_types::CapabilityManifest;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let app = awp_routes(awp_test_state());
+    let response = app
+        .oneshot(Request::get("/awp/manifest").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), 65_536)
+        .await
+        .unwrap();
+    let manifest: CapabilityManifest = serde_json::from_slice(&body).unwrap();
+    assert!(manifest.capabilities.iter().any(|c| c.name == "submit_intent"));
+    assert!(manifest.capabilities.iter().any(|c| c.name == "stream_voice"));
+}
+
+#[tokio::test]
+#[ignore = "set ZAVORA_DEPLOY_URL=https://your-host to run production AWP conformance"]
+async fn awp_conformance_against_deploy_url() {
+    let base = std::env::var("ZAVORA_DEPLOY_URL").expect("ZAVORA_DEPLOY_URL");
+    let client = reqwest::Client::new();
+    let doc: serde_json::Value = client
+        .get(format!("{base}/.well-known/awp.json"))
+        .send()
+        .await
+        .expect("discovery request")
+        .error_for_status()
+        .expect("discovery status")
+        .json()
+        .await
+        .expect("discovery json");
+    assert!(doc.get("version").is_some(), "discovery missing version");
+
+    let manifest: serde_json::Value = client
+        .get(format!("{base}/awp/manifest"))
+        .send()
+        .await
+        .expect("manifest request")
+        .error_for_status()
+        .expect("manifest status")
+        .json()
+        .await
+        .expect("manifest json");
+    let caps = manifest
+        .get("capabilities")
+        .and_then(|c| c.as_array())
+        .expect("capabilities array");
+    assert!(
+        caps.iter()
+            .any(|c| c.get("name").and_then(|n| n.as_str()) == Some("submit_intent")),
+        "manifest missing submit_intent"
+    );
+}
+
 #[test]
 fn business_toml_lists_voice_capabilities() {
     use adk_awp::BusinessContextLoader;

@@ -4,6 +4,8 @@
   "description": "",
   "main": "capture.js",
   "scripts": {
+    "capture": "node capture.js",
+    "capture:prod": "node -e \"if(!process.env.ZAVORA_URL)throw new Error('set ZAVORA_URL')\" && node capture.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

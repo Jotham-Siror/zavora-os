@@ -1,0 +1,61 @@
+# Production stack: Postgres + Zavora OS + Caddy (HTTPS).
+#
+# From repo parent (../ relative to spatial-os):
+#   docker compose -f spatial-os/deploy/docker-compose.yml up -d --build
+#
+# Copy spatial-os/.env.example → deploy/.env and set secrets before going live.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: spatial_os
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spatial_os}
+      POSTGRES_DB: spatial_os
+    volumes:
+      - zavora_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spatial_os -d spatial_os"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ../..
+      dockerfile: spatial-os/Dockerfile
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9847
+      DATABASE_URL: postgres://spatial_os:${POSTGRES_PASSWORD:-spatial_os}@postgres:5432/spatial_os
+      BASE_URL: https://${DOMAIN}
+    volumes:
+      - zavora_artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  zavora_pgdata:
+  zavora_artifacts:
+  caddy_data:
+  caddy_config:

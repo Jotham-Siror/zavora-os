@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'milestone/**']
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone adk-rust (path dependency)
+        run: git clone --depth 1 https://github.com/zavora-ai/adk-rust.git ../adk-rust
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets
+
+      - name: cargo test (offline validate)
+        run: >
+          cargo test --test validate
+          'awp_gate|business_toml|mock_deck|combine_action|keyword_router|artifact_paths|session_store|voice_state|greeting_brand|background_cards|ambient_store|tour_prompts|proactive_mock|deck_agents_build|router_agent|suzy_agent|mcp_allowlist'
+
+      - name: cargo test (live — optional secrets)
+        if: secrets.GOOGLE_API_KEY != ''
+        run: cargo test --test validate gemini_
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
