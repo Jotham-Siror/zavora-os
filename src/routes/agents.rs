@@ -24,10 +24,18 @@ pub struct AgentBody {
 
 pub async fn list_agents(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Path(session_id): Path<String>,
-) -> Result<Json<AgentsResponse>, StatusCode> {
+) -> Result<Json<AgentsResponse>, Response> {
+    let client_key = format!("agents:{session_id}");
+    state
+        .awp
+        .check(&headers, &client_key, "list_agents")
+        .await
+        .map_err(|r| r)?;
+
     let Some((active, resting)) = state.sessions.list_agents(&session_id).await else {
-        return Err(StatusCode::NOT_FOUND);
+        return Err(StatusCode::NOT_FOUND.into_response());
     };
     Ok(Json(AgentsResponse { active, resting }))
 }

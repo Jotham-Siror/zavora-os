@@ -36,6 +36,10 @@ pub struct AppConfig {
     pub google_oauth_client_id: Option<String>,
     pub google_oauth_client_secret: Option<String>,
     pub base_url: String,
+    pub signup_endpoint: Option<String>,
+    pub linkedin_partner_id: Option<String>,
+    pub linkedin_conversion_id: Option<u64>,
+    pub allow_demo_mode: bool,
 }
 
 impl AppConfig {
@@ -158,7 +162,32 @@ impl AppConfig {
                 let port = std::env::var("PORT").unwrap_or_else(|_| "9847".into());
                 format!("http://{host}:{port}")
             }),
+            signup_endpoint: std::env::var("ZAVORA_SIGNUP_ENDPOINT")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            linkedin_partner_id: std::env::var("ZAVORA_LINKEDIN_PARTNER_ID")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            linkedin_conversion_id: std::env::var("ZAVORA_LINKEDIN_CONVERSION_ID")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .and_then(|s| s.parse().ok()),
+            allow_demo_mode: std::env::var("ZAVORA_ALLOW_DEMO")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
         })
+    }
+
+    /// Host portion for AWP discovery (`business.toml` domain override).
+    pub fn public_domain(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if let Some(rest) = base
+            .strip_prefix("https://")
+            .or_else(|| base.strip_prefix("http://"))
+        {
+            return rest.split('/').next().unwrap_or(rest).to_string();
+        }
+        format!("{}:{}", self.host, self.port)
     }
 
     pub fn postgres_enabled(&self) -> bool {

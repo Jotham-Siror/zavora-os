@@ -1,13 +1,19 @@
 use axum::{extract::State, Json};
-use serde_json::json;
+use serde::Serialize;
 
 use crate::state::AppState;
 
-pub async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(json!({
-        "status": "ok",
-        "service": "zavora-os",
-        "milestone": "M10",
-        "voice_enabled": state.voice.enabled
-    }))
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: &'static str,
+    pub service: &'static str,
+    pub runtime: crate::state::RuntimeStatus,
+}
+
+pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok",
+        service: "zavora-os",
+        runtime: state.runtime.clone(),
+    })
 }

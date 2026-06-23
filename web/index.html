@@ -712,10 +712,42 @@
   </div>
 
 <script>
+const __isLocalHost = () => /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+let SIGNUP_ENDPOINT = 'https://formspree.io/f/xwvzgbee';
+let LINKEDIN_CONVERSION_ID = 28504817;
+let LINKEDIN_PARTNER_ID = '10281097';
+
 window.__ZAVORA_DEMO__ =
   new URLSearchParams(location.search).get('demo') === '1' ||
   localStorage.getItem('zavora_demo') === '1';
 if (window.__ZAVORA_DEMO__) document.getElementById('demoBanner')?.removeAttribute('hidden');
+
+window.__ZAVORA_BOOT__ = (async () => {
+  try {
+    const res = await fetch('/api/public-config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg.signup_endpoint) SIGNUP_ENDPOINT = cfg.signup_endpoint;
+    if (cfg.linkedin_conversion_id) LINKEDIN_CONVERSION_ID = cfg.linkedin_conversion_id;
+    if (cfg.linkedin_partner_id) LINKEDIN_PARTNER_ID = cfg.linkedin_partner_id;
+    if (window.__ZAVORA_DEMO__ && !cfg.allow_demo_mode && !__isLocalHost()) {
+      window.__ZAVORA_DEMO__ = false;
+      localStorage.removeItem('zavora_demo');
+      const banner = document.getElementById('demoBanner');
+      if (banner) {
+        banner.removeAttribute('hidden');
+        banner.innerHTML = '<b>Demo mode disabled</b> on this host — live orchestration only.';
+      }
+    }
+    if (cfg.uses_mock_orchestration && !window.__ZAVORA_DEMO__) {
+      const banner = document.getElementById('demoBanner');
+      if (banner) {
+        banner.removeAttribute('hidden');
+        banner.innerHTML = '<b>Simulated agents</b> — set <code>GOOGLE_API_KEY</code> and MCP servers for live deck/morning flows.';
+      }
+    }
+  } catch (_) { /* offline file:// */ }
+})();
 
 async function hydrateAuthPill() {
   if (window.__ZAVORA_DEMO__) return;
@@ -1460,7 +1492,7 @@ mic.addEventListener('click', async () => {
     const sid = sessionStorage.getItem('zavora_session_id');
     const ok = await live.start({
       sessionId: sid,
-      onTranscript: (t) => { if (t.trim()) { input.value = t.trim(); submitIntent(t.trim()); live.stop(); } },
+      onTranscript: (t) => { if (t.trim()) input.value = t.trim(); },
     });
     if (ok) return;
     mic.classList.remove('listening');
@@ -2165,8 +2197,7 @@ const eaModal = document.getElementById('eaModal');
 const eaForm = document.getElementById('eaForm');
 const eaDone = document.getElementById('eaDone');
 // Set this to your form endpoint (Formspree/Getform/etc.) to collect emails for real.
-const SIGNUP_ENDPOINT = 'https://formspree.io/f/xwvzgbee';
-const LINKEDIN_CONVERSION_ID = 28504817;   // LinkedIn Campaign Manager — Early Access Signup
+// SIGNUP_ENDPOINT + LinkedIn IDs loaded from /api/public-config (see __ZAVORA_BOOT__)
 // capture campaign params so signups are attributable (e.g. ?utm_source=linkedin)
 const utm = (() => {
   const p = new URLSearchParams(location.search), o = {};

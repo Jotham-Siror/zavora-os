@@ -13,5 +13,6 @@ pub mod intent;
 pub mod live;
 pub mod oauth;
 pub mod people;
+pub mod public;
 pub mod session;
 pub mod voice;

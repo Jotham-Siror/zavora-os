@@ -138,12 +138,12 @@ pub async fn build_suzy_runner(
                     }
                 };
 
-                crate::voice::dispatch::spawn_voice_intent(state, session_id.clone(), user_id, text.clone());
-
                 Ok(json!({
                     "status": "started",
                     "session_id": session_id,
-                    "intent": text
+                    "user_id": user_id,
+                    "intent": text,
+                    "dispatch": "client_sse"
                 }))
             }),
         )

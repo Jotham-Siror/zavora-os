@@ -50,8 +50,17 @@ async fn main() -> anyhow::Result<()> {
     tokio::fs::create_dir_all(&config.artifact_dir).await?;
 
     let loader = BusinessContextLoader::from_file(&config.business_toml)?;
+    {
+        let mut ctx = loader.load().as_ref().clone();
+        ctx.domain = config.public_domain();
+        loader.context_ref().store(std::sync::Arc::new(ctx));
+    }
     let biz = loader.load();
-    tracing::info!("Loaded business context: {}", biz.site_name);
+    tracing::info!(
+        "Loaded business context: {} (domain={})",
+        biz.site_name,
+        biz.domain
+    );
     let brand_greeting_body = biz
         .brand_voice
         .as_ref()
@@ -225,7 +234,34 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    let runtime = spatial_os::state::RuntimeStatus {
+        milestone: "M11",
+        agents_enabled: config.agents_enabled(),
+        postgres_enabled: config.postgres_enabled(),
+        auth_enabled: config.auth_enabled(),
+        voice_enabled: voice.enabled,
+        coordinator_enabled,
+        uses_mock_orchestration: !deck_enabled,
+        scenarios: scenario_flags,
+        mcp_worksheet: config.mcp_worksheet_path.exists(),
+        mcp_docx: config.mcp_docx_path.exists(),
+        mcp_slides: config.mcp_slides_path.exists(),
+        mcp_news: config.mcp_news_path.exists(),
+        allow_demo_mode: config.allow_demo_mode,
+        public_domain: config.public_domain(),
+        signup_endpoint: config.signup_endpoint.clone(),
+        linkedin_partner_id: config.linkedin_partner_id.clone(),
+        linkedin_conversion_id: config.linkedin_conversion_id,
+    };
+
+    if runtime.uses_mock_orchestration {
+        tracing::warn!(
+            "Orchestration mock fallback active — set GOOGLE_API_KEY and build MCP servers for live agents"
+        );
+    }
+
     let app_state = AppState::new(
+        runtime,
         session_store,
         config.artifact_dir.clone(),
         scenario_flags,
@@ -269,6 +305,7 @@ async fn main() -> anyhow::Result<()> {
 
     let api = Router::new()
         .route("/health", get(routes::health::health))
+        .route("/api/public-config", get(routes::public::public_config))
         .route("/api/greeting", get(routes::greeting::get_greeting))
         .route("/api/people", get(routes::people::get_people))
         .route("/api/live", get(routes::live::get_live))
@@ -339,8 +376,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::artifacts::get_legacy),
         )
         .route("/awp/events/subscribe", post(routes::awp::subscribe))
+        .route("/awp/a2a", post(routes::intent::a2a_intent))
         .with_state(app_state)
         .merge(awp_router(awp_state))
+        .layer(from_fn(version_negotiation))
         .layer(CorsLayer::very_permissive());
 
     let mut app = api.layer(Extension(session_store));
@@ -760,7 +799,6 @@ fn awp_router(state: AwpState) -> Router {
             "/awp/events/subscriptions/{id}",
             delete(handlers::delete_subscription),
         )
-        .route("/awp/a2a", post(routes::intent::a2a_intent))
         .layer(from_fn(version_negotiation))
         .with_state(state)
 }

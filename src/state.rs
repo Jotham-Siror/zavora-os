@@ -326,8 +326,30 @@ struct UiSessionRow {
     agents_resting: serde_json::Value,
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct RuntimeStatus {
+    pub milestone: &'static str,
+    pub agents_enabled: bool,
+    pub postgres_enabled: bool,
+    pub auth_enabled: bool,
+    pub voice_enabled: bool,
+    pub coordinator_enabled: bool,
+    pub uses_mock_orchestration: bool,
+    pub scenarios: ScenarioLiveFlags,
+    pub mcp_worksheet: bool,
+    pub mcp_docx: bool,
+    pub mcp_slides: bool,
+    pub mcp_news: bool,
+    pub allow_demo_mode: bool,
+    pub public_domain: String,
+    pub signup_endpoint: Option<String>,
+    pub linkedin_partner_id: Option<String>,
+    pub linkedin_conversion_id: Option<u64>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
+    pub runtime: RuntimeStatus,
     pub sessions: SessionStore,
     pub deck_runner: Option<Arc<Runner>>,
     pub combine_runner: Option<Arc<Runner>>,
@@ -362,6 +384,7 @@ pub struct AppState {
 impl AppState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        runtime: RuntimeStatus,
         sessions: SessionStore,
         artifact_dir: PathBuf,
         scenario_flags: ScenarioLiveFlags,
@@ -393,6 +416,7 @@ impl AppState {
         voice: crate::voice::VoiceState,
     ) -> Self {
         Self {
+            runtime,
             sessions,
             deck_runner,
             combine_runner,

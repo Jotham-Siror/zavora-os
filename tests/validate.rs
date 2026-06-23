@@ -461,6 +461,91 @@ async fn awp_conformance_against_deploy_url() {
     );
 }
 
+#[tokio::test]
+async fn health_exposes_runtime_status() {
+    use adk_awp::BusinessContextLoader;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    common::load_env();
+    let config = AppConfig::from_env().expect("config");
+    let path = common::manifest_dir().join("business.toml");
+    let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
+    let awp = Arc::new(spatial_os::awp_gate::AwpGate::new(
+        config.jwt_secret.clone(),
+        loader.context_ref(),
+    ));
+    let runtime = spatial_os::state::RuntimeStatus {
+        milestone: "M11",
+        agents_enabled: config.agents_enabled(),
+        postgres_enabled: config.postgres_enabled(),
+        auth_enabled: config.auth_enabled(),
+        voice_enabled: config.voice_enabled(),
+        coordinator_enabled: config.agents_enabled(),
+        uses_mock_orchestration: !config.agents_enabled(),
+        scenarios: spatial_os::scenarios::ScenarioLiveFlags::default(),
+        mcp_worksheet: false,
+        mcp_docx: false,
+        mcp_slides: false,
+        mcp_news: false,
+        allow_demo_mode: config.allow_demo_mode,
+        public_domain: config.public_domain(),
+        signup_endpoint: config.signup_endpoint.clone(),
+        linkedin_partner_id: config.linkedin_partner_id.clone(),
+        linkedin_conversion_id: config.linkedin_conversion_id,
+    };
+    let state = spatial_os::state::AppState::new(
+        runtime,
+        spatial_os::state::SessionStore::new(),
+        config.artifact_dir.clone(),
+        spatial_os::scenarios::ScenarioLiveFlags::default(),
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Arc::new({
+            use adk_session::InMemorySessionService;
+            InMemorySessionService::new()
+        }),
+        None,
+        awp,
+        Arc::new(adk_awp::InMemoryEventSubscriptionService::new()),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        spatial_os::ambient::AmbientStore::new(),
+        false,
+        None,
+        "test".into(),
+        None,
+        spatial_os::voice::VoiceState::boot(&config),
+    );
+    let app = axum::Router::new()
+        .route("/health", axum::routing::get(spatial_os::routes::health::health))
+        .with_state(state);
+    let response = app
+        .oneshot(Request::get("/health").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["runtime"]["milestone"], "M11");
+}
+
 #[test]
 fn business_toml_lists_voice_capabilities() {
     use adk_awp::BusinessContextLoader;

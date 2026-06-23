@@ -40,3 +40,18 @@ jobs:
         run: cargo test --test validate gemini_
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: spatial-os
+
+      - name: Clone adk-rust
+        run: git clone --depth 1 https://github.com/zavora-ai/adk-rust.git adk-rust
+        working-directory: spatial-os/..
+
+      - name: Docker build
+        run: docker build -f spatial-os/Dockerfile -t zavora-os:ci .
+        working-directory: spatial-os/..

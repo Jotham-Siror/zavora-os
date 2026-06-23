@@ -41,7 +41,7 @@ pub fn pick_action(text: &str) -> Option<&'static str> {
     None
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize)]
 pub struct ScenarioLiveFlags {
     pub deck: bool,
     pub morning: bool,
