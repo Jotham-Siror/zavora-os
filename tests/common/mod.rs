@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 pub fn load_env() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let _ = dotenvy::from_filename(manifest.join(".env.local"));
     let _ = dotenvy::from_filename(manifest.join(".env"));
     dotenvy::dotenv().ok();
 }
