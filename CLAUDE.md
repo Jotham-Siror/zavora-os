@@ -73,7 +73,7 @@ cargo clippy --all-targets
 | `web/index.html`, `web/static/field-client.js` | The field UI and its SSE bridge. The visual language is a product constraint — do not redesign it while wiring features. |
 | `business.toml`, `mcp_allowlists.toml` | AWP identity and capability catalog; per-agent tool allowlists (and, from Phase 2, world / mode / effects). |
 | `migrations/` | sqlx migrations, applied at boot. Numbered; never edit an applied one. |
-| `docs/` | `SPECIFICATION.md` (Phase 1 spec, FR/NFR ids), `IMPLEMENTATION_PLAN.md` (tickable milestones and sprints), `PERSONAL_AI_OS.md` + `SPRINT_PLAN.md` (Phase 2), `adr/` (decisions), `personal-ai-os.html` (one-page interactive summary). |
+| `docs/` | `SPECIFICATION.md` (Phase 1 spec, FR/NFR ids), `IMPLEMENTATION_PLAN.md` (tickable milestones and sprints), `PERSONAL_AI_OS.md` + `SPRINT_PLAN.md` (Phase 2), `PROGRESS.md` (per-person team sprints A–F for S4–S12), `adr/` (decisions), `personal-ai-os.html` (one-page interactive summary). |
 | `tests/validate.rs` | The integration suite; `tests/common/mod.rs` has env and path helpers. |
 | `scripts/` | Demo capture, TTS clip generation, synthetic ledger generator. |
 
