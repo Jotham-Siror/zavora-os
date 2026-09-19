@@ -1,8 +1,15 @@
 # MCP Registry-compatible tool allowlists per sub-agent (BK-011).
 # Discovery ≠ exposure: agents only receive tools listed for their agent id.
+#
+# Phase 2 (ADR-002/003): each entry also declares the agent's `world` (work|home|shared),
+# its default `mode` (observe|suggest|automate) and, from S2, an `[allowlist.effects]` table
+# classifying every tool (read | write_local | schedule_with_others | send_external |
+# publish_public | financial | delete). Missing mode → suggest; missing world → shared.
 
 [[allowlist]]
 agent = "excel_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "worksheet"
 reason = "Deck revenue spreadsheet — write-only workbook tools"
 tools = [
@@ -20,6 +27,8 @@ tools = [
 
 [[allowlist]]
 agent = "docs_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "docx"
 reason = "Deck narrative doc — paragraph writes only"
 tools = [
@@ -33,6 +42,8 @@ tools = [
 
 [[allowlist]]
 agent = "slides_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "slides"
 reason = "Deck slides assembly"
 tools = [
@@ -46,6 +57,8 @@ tools = [
 
 [[allowlist]]
 agent = "combine_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "slides"
 reason = "Merge excel+docs into final deck"
 tools = [
@@ -66,6 +79,8 @@ tools = [
 
 [[allowlist]]
 agent = "calendar_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "calendar"
 reason = "Morning calendar card"
 tools = [
@@ -78,24 +93,32 @@ tools = [
 
 [[allowlist]]
 agent = "inbox_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "email"
 reason = "Morning inbox card"
 tools = ["list_inbox", "search_emails", "create_draft", "get_email"]
 
 [[allowlist]]
 agent = "brief_agent"
+world = "shared"
+mode = "observe"
 mcp_server = "news"
 reason = "Today brief — headlines"
 tools = ["gnews_top_headlines", "search_news", "get_country_news"]
 
 [[allowlist]]
 agent = "brief_agent"
+world = "shared"
+mode = "observe"
 mcp_server = "weather"
 reason = "Today brief — forecast"
 tools = ["get_forecast", "geocode_location"]
 
 [[allowlist]]
 agent = "headlines_agent"
+world = "home"
+mode = "observe"
 mcp_server = "news"
 reason = "Live headlines carousel"
 tools = [
@@ -107,24 +130,32 @@ tools = [
 
 [[allowlist]]
 agent = "markets_agent"
+world = "home"
+mode = "observe"
 mcp_server = "news"
 reason = "Live markets — trending context"
 tools = ["get_trending_topics"]
 
 [[allowlist]]
 agent = "markets_agent"
+world = "home"
+mode = "observe"
 mcp_server = "market_data"
 reason = "Live markets — quotes"
 tools = ["yfinance_chart"]
 
 [[allowlist]]
 agent = "now_agent"
+world = "home"
+mode = "observe"
 mcp_server = "news"
 reason = "Live now strip"
 tools = ["gnews_top_headlines", "get_trending_topics", "search_news"]
 
 [[allowlist]]
 agent = "team_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "slack"
 reason = "People rail — team channels"
 tools = [
@@ -136,12 +167,16 @@ tools = [
 
 [[allowlist]]
 agent = "priya_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "calendar"
 reason = "People rail — Priya calendar"
 tools = ["list_events", "search_events", "find_free_time", "get_today"]
 
 [[allowlist]]
 agent = "connections_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "crm"
 reason = "People rail — CRM connections"
 tools = [
@@ -153,42 +188,56 @@ tools = [
 
 [[allowlist]]
 agent = "money_agent"
+world = "home"
+mode = "observe"
 mcp_server = "banking"
 reason = "Week rail — money"
 tools = ["list_transactions", "search_transactions", "list_accounts"]
 
 [[allowlist]]
 agent = "focus_agent"
+world = "work"
+mode = "suggest"
 mcp_server = "github"
 reason = "Week rail — engineering focus"
 tools = ["list_commits", "list_pull_requests", "search_repositories"]
 
 [[allowlist]]
 agent = "planner_agent"
+world = "home"
+mode = "suggest"
 mcp_server = "maps"
 reason = "Lisbon itinerary — POI and routes"
 tools = ["geocode", "search_poi", "get_route"]
 
 [[allowlist]]
 agent = "planner_agent"
+world = "home"
+mode = "suggest"
 mcp_server = "weather"
 reason = "Lisbon itinerary — forecast"
 tools = ["get_forecast", "geocode_location"]
 
 [[allowlist]]
 agent = "stay_agent"
+world = "home"
+mode = "suggest"
 mcp_server = "real_estate"
 reason = "Lisbon stay search"
 tools = ["geocode_search", "search_properties_nearby", "us_search_properties"]
 
 [[allowlist]]
 agent = "research_agent"
+world = "work"
+mode = "observe"
 mcp_server = "news"
 reason = "Ambient research"
 tools = ["gnews_top_headlines", "search_news", "get_trending_topics"]
 
 [[allowlist]]
 agent = "scout_agent"
+world = "home"
+mode = "observe"
 mcp_server = "real_estate"
 reason = "Ambient scout — listings"
 tools = ["search_properties_nearby", "geocode_search"]

@@ -12,6 +12,19 @@ env:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: spatial_os
+          POSTGRES_PASSWORD: spatial_os
+          POSTGRES_DB: spatial_os
+        ports: ['5434:5432']
+        options: >-
+          --health-cmd "pg_isready -U spatial_os -d spatial_os"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://spatial_os:spatial_os@localhost:5434/spatial_os
     steps:
       - uses: actions/checkout@v4
 
@@ -30,10 +43,18 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --all-targets
 
+      # libtest filters are substrings, not regexes — pass each as its own argument.
+      - name: cargo test (unit)
+        run: cargo test --lib
+
       - name: cargo test (offline validate)
         run: >
-          cargo test --test validate
-          'awp_gate|business_toml|mock_deck|combine_action|keyword_router|artifact_paths|session_store|voice_state|greeting_brand|background_cards|ambient_store|tour_prompts|proactive_mock|deck_agents_build|router_agent|suzy_agent|mcp_allowlist'
+          cargo test --test validate --
+          awp_gate business_toml mock_deck combine_action keyword_router artifact_paths
+          session_store voice_state greeting_brand background_cards ambient_store tour_prompts
+          proactive_mock deck_agents_build router_agent suzy_agent mcp_allowlist health_exposes
+          postgres_schema ui_session_persists pg_agent_session
+          domain_ intake_ mother_ ledger_ permission_ gate_ pending_ memory_ effects_
 
       - name: cargo test (live — optional secrets)
         if: secrets.GOOGLE_API_KEY != ''

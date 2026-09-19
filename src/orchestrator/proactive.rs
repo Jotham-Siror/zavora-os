@@ -111,6 +111,7 @@ pub fn stream_proactive(
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card("proactive", card),
                 })))
                 .await;
         }

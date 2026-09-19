@@ -12,6 +12,8 @@ pub enum FieldEvent {
     CardSpawn {
         index: usize,
         card: serde_json::Value,
+        /// Life domain of the card (ADR-002).
+        domain: crate::domain::Domain,
     },
     CardStatus {
         index: usize,

@@ -179,6 +179,7 @@ pub fn stream_morning(
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card("morning", card),
                 })))
                 .await;
         }

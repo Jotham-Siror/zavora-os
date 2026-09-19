@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use crate::domain::Domain;
 use adk_awp::InMemoryEventSubscriptionService;
 
 use crate::ambient::AmbientStore;
@@ -36,6 +37,9 @@ pub struct CardRecord {
     pub resolve: Option<serde_json::Value>,
     pub pinned: bool,
     pub removed: bool,
+    /// Life domain of the card (ADR-002); `shared` for Phase 1 data.
+    #[serde(default)]
+    pub domain: Domain,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,6 +49,9 @@ pub struct AgentRecord {
     pub glyph: String,
     pub agent: String,
     pub rail: String,
+    /// Life domain of the agent (ADR-002); `shared` for Phase 1 data.
+    #[serde(default)]
+    pub domain: Domain,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -196,6 +203,7 @@ impl SessionStore {
                 existing.pinned = pinned;
                 return;
             }
+            let domain = Domain::for_card(record.scenario.as_deref().unwrap_or(""), &card);
             record.cards.push(CardRecord {
                 index,
                 card,
@@ -203,6 +211,7 @@ impl SessionStore {
                 resolve,
                 pinned,
                 removed: false,
+                domain,
             });
             record.cards.sort_by_key(|c| c.index);
         })
@@ -226,8 +235,11 @@ impl SessionStore {
             .map(|r| r.cards.into_iter().filter(|c| !c.removed).collect())
     }
 
-    pub async fn agent_active(&self, session_id: &str, agent: AgentRecord) {
+    pub async fn agent_active(&self, session_id: &str, mut agent: AgentRecord) {
         self.mutate(session_id, |record| {
+            if agent.domain == Domain::Shared {
+                agent.domain = Domain::for_scenario(record.scenario.as_deref().unwrap_or(""));
+            }
             record.agents_resting.retain(|a| a.id != agent.id);
             if !record.agents_active.iter().any(|a| a.id == agent.id) {
                 record.agents_active.push(agent);
@@ -329,6 +341,8 @@ struct UiSessionRow {
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct RuntimeStatus {
     pub milestone: &'static str,
+    /// Phase 2 sprint the running build corresponds to (e.g. `P2-S0`).
+    pub phase: &'static str,
     pub agents_enabled: bool,
     pub postgres_enabled: bool,
     pub auth_enabled: bool,

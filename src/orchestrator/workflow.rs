@@ -81,6 +81,7 @@ pub fn stream_workflow(
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card(scenario_key, card),
                 })))
                 .await;
         }
