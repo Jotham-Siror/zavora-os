@@ -477,6 +477,9 @@
       getSessionId() {
         return sessionId;
       },
+      recordUiEvent(kind, extra) {
+        queueUiEvent(kind, extra);
+      },
     };
 
     wirePersistence();

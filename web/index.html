@@ -553,9 +553,27 @@
   .tile.dom-home .av { background: linear-gradient(135deg, rgba(61,220,151,.38), rgba(61,220,151,.18)); }
   .mode-badge { margin-left: 5px; font-size: 10px; opacity: .75; cursor: default; }
 
+  /* domain lens (S10-T2 pulled forward): view one world at a time; shared always shows */
+  .lens { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 36;
+    display: flex; gap: 3px; padding: 4px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(18px); }
+  .lens button { padding: 5px 14px; border-radius: 999px; border: none; background: none;
+    color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .4px; cursor: pointer;
+    transition: all .25s var(--spring); }
+  .lens button:hover { color: var(--ink); }
+  .lens button.on { color: #fff; background: linear-gradient(120deg, var(--accent-a), #5b7cff); }
+  .lens button.on[data-lens="work"] { background: linear-gradient(120deg, #4a72e8, #5b8cff); }
+  .lens button.on[data-lens="home"] { background: linear-gradient(120deg, #1fae72, #3ddc97); }
+  body[data-lens="work"] .card.dom-home, body[data-lens="home"] .card.dom-work {
+    opacity: .12; filter: blur(2px) grayscale(.8); transform: scale(.92); pointer-events: none; }
+  body[data-lens="work"] .tile.dom-home, body[data-lens="home"] .tile.dom-work {
+    opacity: .18; filter: grayscale(.8); pointer-events: none; }
+  body[data-lens="work"] .appr-row.dom-home, body[data-lens="home"] .appr-row.dom-work { display: none; }
+  @media (max-width: 640px) { .lens { top: 52px; } }
+
   /* ---------- Phase 2 surface: launchers + panels (Mother chat S10-T3, approvals S10-T4) ---------- */
   /* explicit display values below would defeat the hidden attribute without this */
-  .p2-launch[hidden], .p2-panel[hidden], .p2-count[hidden], .p2-mini[hidden] { display: none !important; }
+  .p2-launch[hidden], .p2-panel[hidden], .p2-count[hidden], .p2-mini[hidden], .lens[hidden] { display: none !important; }
   .p2-launch { position: fixed; right: 18px; z-index: 55; width: 46px; height: 46px;
     border-radius: 50%; border: 1px solid var(--stroke); background: var(--glass); color: var(--ink);
     font-size: 18px; cursor: pointer; backdrop-filter: blur(18px); display: grid; place-items: center;
@@ -586,6 +604,14 @@
   .chat-turn.mother { align-self: flex-start; background: rgba(255,255,255,.05); border: 1px solid var(--stroke); color: #e7ebff; }
   .chat-turn.mother b { color: #fff; }
   .chat-turn.pending { color: var(--muted); font-style: italic; }
+  .chat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat-chip { padding: 6px 12px; border-radius: 999px; font-size: 11.5px; color: var(--muted);
+    background: rgba(255,255,255,.04); border: 1px solid var(--stroke); cursor: pointer; transition: all .2s ease; }
+  .chat-chip:hover { color: var(--ink); background: rgba(255,255,255,.1); }
+  .tdots { display: inline-flex; gap: 3px; padding: 3px 2px; }
+  .tdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: tdot 1.2s ease-in-out infinite; }
+  .tdots i:nth-child(2) { animation-delay: .15s; } .tdots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes tdot { 0%,100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
   .p2-inrow { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
   .p2-inrow input { flex: 1; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid var(--stroke);
     border-radius: 12px; color: var(--ink); font-size: 16px; padding: 9px 12px; outline: none; }
@@ -607,6 +633,15 @@
   .appr-btns { display: flex; gap: 7px; }
   .appr-btns .btn { padding: 7px 10px; font-size: 12px; flex: none; }
   .appr-btns .btn.approve { flex: 1; }
+  .appr-row.appr-out { transform: translateX(60px); opacity: 0; transition: all .3s var(--spring); }
+  .appr-divider { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--stroke);
+    font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: rgba(154,164,196,.6); font-weight: 700; }
+  .audit-row { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--muted); padding: 2px 0; }
+  .audit-row .ic { flex: none; }
+  .audit-row .sum { color: #cdd5f0; }
+  .audit-row .when { margin-left: auto; font-size: 10px; flex: none; }
+  .p2-launch.pulse::after { content: ''; position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px solid rgba(255,179,90,.7); animation: ring 1.2s ease-out 2; }
   .p2-toasts { position: fixed; right: 76px; bottom: 20px; z-index: 57; display: flex;
     flex-direction: column-reverse; gap: 8px; pointer-events: none; align-items: flex-end; }
   .p2-toast { padding: 10px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--stroke);
@@ -726,6 +761,13 @@
 
   <div class="origin" id="origin"><span class="dot"></span><span>From your intent &nbsp;·&nbsp; <b id="originText"></b></span></div>
 
+  <!-- domain lens (S10-T2 pulled forward) — behaviour in /static/lens.js -->
+  <div class="lens" id="lensCtl" hidden role="group" aria-label="Domain lens">
+    <button type="button" data-lens="both" class="on">Both</button>
+    <button type="button" data-lens="work">Work</button>
+    <button type="button" data-lens="home">Home</button>
+  </div>
+
   <div class="suzy" id="suzy"><div class="face" id="suzyFace">✦</div><div class="text" id="suzyText"></div></div>
 
   <!-- Phase 2 surface (live mode only) — behaviour in /static/mother-chat.js + /static/approvals.js -->
@@ -734,6 +776,7 @@
   <div class="p2-panel" id="apprPanel" hidden>
     <div class="p2-head"><span>Pending approvals</span>
       <button class="p2-mini" id="apprAll" hidden>Approve all</button>
+      <button class="p2-x" id="apprRefresh" title="Refresh" aria-label="Refresh approvals">↻</button>
       <button class="p2-x" id="apprClose" aria-label="Close approvals">×</button></div>
     <div class="p2-list" id="apprList"></div>
   </div>
@@ -2459,6 +2502,7 @@ submitIntent = function (text) {
 </script>
 <script src="/static/live-voice.js"></script>
 <script src="/static/field-client.js"></script>
+<script src="/static/lens.js"></script>
 <script src="/static/approvals.js"></script>
 <script src="/static/mother-chat.js"></script>
 </body>
