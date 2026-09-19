@@ -156,6 +156,7 @@ fn stream_multi_target(
 
     tokio::spawn(async move {
         let started = chrono::Utc::now();
+        let trace_id = crate::mother::bus::AgentBus::new_trace_id();
         let targets = intake.targets.clone();
         let primary = intake
             .targets
@@ -166,7 +167,7 @@ fn stream_multi_target(
             .to_string();
 
         // Worlds with a mother fold their targets into one structured result (S4-T1).
-        let fan = crate::worlds::fan_out(&state, &session_id, &user_id, &text, targets).await;
+        let fan = crate::worlds::fan_out(&state, &session_id, &user_id, &text, targets, &trace_id).await;
         let targets = fan.targets;
         for w in [&fan.work, &fan.home].into_iter().flatten() {
             tracing::info!(world = %w.world, agents = w.agents.len(), facts = w.facts.len(), stubs = w.stubs.len(), "world mother result");
@@ -206,7 +207,7 @@ fn stream_multi_target(
             .memory
             .notes_for(&user_id, crate::memory::Scope::MOTHER, 3)
             .await;
-        let synthesis = synth::compose(
+        let mut synthesis = synth::compose(
             state.suzy_runner.as_ref().filter(|_| state.coordinator_enabled),
             &user_id,
             &session_id,
@@ -216,6 +217,18 @@ fn stream_multi_target(
             &mode_for,
         )
         .await;
+        // Arbitration v1 (S6-T5): dedupe proposals; a work/home clash becomes one question.
+        let arb = crate::mother::arbitrate::review(&state.memory, &user_id, &mut synthesis).await;
+        if let Some(q) = &arb.question {
+            use crate::mother::bus::{global as bus, Address, AgentMessage, Kind};
+            let _ = bus().publish(AgentMessage::new(&trace_id, Address::new("arbitration", Domain::Shared), Address::mother(), Kind::Conflict, serde_json::json!({ "conflicts": arb.conflicts, "protected_violations": arb.protected_violations })));
+            state.ledger.record(
+                crate::intelligence::ledger::ActivityEvent::new(&user_id, Domain::Shared, "arbitration", "conflict")
+                    .meta(serde_json::json!({ "count": arb.conflicts + arb.protected_violations }))
+                    .trace(&trace_id),
+            );
+            tracing::info!(trace = %trace_id, "arbitration asked one question: {}", synth::strip_tags(q));
+        }
 
         state
             .sessions

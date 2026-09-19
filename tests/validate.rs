@@ -2645,3 +2645,63 @@ async fn home_agents_keep_conservative_defaults_and_health_never_diagnoses() {
     let social = spatial_os::agents::personal_social::build().await.expect("stub");
     assert_eq!(social.name(), "personal_social_agent");
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 · S6 — agent bus and arbitration
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn bus_carries_requests_and_results_for_a_turn() {
+    use spatial_os::domain::Domain;
+    use spatial_os::mother::bus::{global, Kind};
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-bus".into()).await;
+    let mut rx = global().subscribe();
+    let _ = collect_sse_events(dispatch_intent(IntentDispatch { state: &state, session_id: rec.session_id.clone(), user_id: rec.user_id.clone(), text: "What's happening with work?".into() }).await).await;
+    let mut msgs = Vec::new();
+    while let Ok(m) = rx.try_recv() {
+        msgs.push(m);
+    }
+    let trace = msgs.iter().find(|m| m.kind == Kind::Result && m.from.agent == "work_mother").map(|m| m.trace_id.clone()).expect("work_mother result");
+    let turn = global().trace(&trace);
+    assert!(turn.iter().all(|m| m.trace_id == trace));
+    assert!(turn.iter().any(|m| m.kind == Kind::Request && m.from.agent == "mother" && m.to.agent == "work_mother" && m.depth == 1));
+    assert!(turn.iter().any(|m| m.kind == Kind::Request && m.from.agent == "work_mother" && m.depth == 2));
+    assert!(turn.iter().all(|m| m.depth <= spatial_os::mother::bus::MAX_DEPTH));
+    let result = turn.iter().find(|m| m.kind == Kind::Result).unwrap();
+    assert_eq!(result.domain, Domain::Shared);
+    assert!(result.payload["facts"].as_array().unwrap().iter().any(|f| f.as_str().unwrap().contains("work agents ran")));
+}
+
+#[tokio::test]
+async fn arbitration_asks_one_question_for_a_work_home_overlap() {
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-arb".into()).await;
+    let run = |text: &str| {
+        let state = state.clone();
+        let (sid, uid, text) = (rec.session_id.clone(), rec.user_id.clone(), text.to_string());
+        async move { collect_sse_events(dispatch_intent(IntentDispatch { state: &state, session_id: sid, user_id: uid, text }).await).await }
+    };
+    run("Remember family dinner Thursday at 18:30").await;
+    run("Remember the client review is Thursday 17:30-19:00").await;
+
+    let events = run("I'm overwhelmed. Help me reorganize today.").await;
+    let summary = events.iter().find(|e| e["type"] == "suzy_summary").unwrap()["html"].as_str().unwrap();
+    assert!(summary.starts_with("You have a family commitment thursday at 18:30, but your current work schedule extends into that period"), "{summary}");
+    assert_eq!(summary.matches("Would you like me to help reorganize").count(), 1, "exactly one question");
+    assert!(!summary.contains("should") && !summary.contains("too much"), "neutral wording");
+    let first_suggest = events.iter().find(|e| e["type"] == "suggest").unwrap();
+    assert!(first_suggest["text"].as_str().unwrap().starts_with("💡 Reorganize my tasks"));
+
+    state.ledger.flush().await;
+    let conflicts = state.ledger.query(&spatial_os::intelligence::LedgerQuery { user_id: rec.user_id.clone(), kind: Some("conflict".into()), ..Default::default() }).await;
+    assert_eq!(conflicts.len(), 1);
+    assert!(conflicts[0].trace_id.is_some());
+    assert!(!serde_json::to_string(&conflicts).unwrap().contains("client review"), "ledger carries counts, not commitments");
+}
