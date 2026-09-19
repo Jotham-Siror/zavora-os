@@ -7,7 +7,7 @@ mod common;
 
 use std::sync::Arc;
 
-use adk_core::{Content, Llm, LlmRequest};
+use adk_core::{Content, Llm, LlmRequest, ReadonlyContext};
 use adk_model::gemini::GeminiModel;
 use futures::StreamExt;
 use spatial_os::config::AppConfig;
@@ -291,6 +291,7 @@ async fn greeting_brand_fallback_is_honest() {
         None,
         "I'm synced and ready — tell me what you'd like to do.",
         Some("warm, confident"),
+        None
     )
     .await;
     assert_eq!(payload.source, "brand");
@@ -1280,4 +1281,588 @@ fn business_toml_lists_chat_mother_capability() {
     let path = common::manifest_dir().join("business.toml");
     let ctx = BusinessContextLoader::from_file(&path).expect("business.toml").load();
     assert!(ctx.capabilities.iter().any(|c| c.name == "chat_mother" && c.endpoint.contains("/chat")));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 · S2 — activity ledger, permission gate, pending actions, audit
+// ---------------------------------------------------------------------------
+
+/// A fake toolset with one tool per effect class the tests need. Tool names are chosen so
+/// the allowlist catalog classifies them for `inbox_agent` (`list_inbox` read, `create_draft`
+/// write_local) or falls back to the most restrictive effect (`send_anything` → send_external).
+struct FakeInboxTools;
+
+#[async_trait::async_trait]
+impl adk_core::Toolset for FakeInboxTools {
+    fn name(&self) -> &str {
+        "fake-inbox"
+    }
+    async fn tools(
+        &self,
+        _ctx: std::sync::Arc<dyn adk_core::ReadonlyContext>,
+    ) -> adk_core::Result<Vec<std::sync::Arc<dyn adk_core::Tool>>> {
+        use adk_tool::FunctionTool;
+        let list = FunctionTool::new("list_inbox", "list", |_c, _a| async { Ok(serde_json::json!({"output": "[]"})) });
+        let draft = FunctionTool::new("create_draft", "draft", |_c, a| async move { Ok(serde_json::json!({"output": "draft ok", "echo": a})) });
+        let send = FunctionTool::new("send_anything", "send", |_c, _a| async { Ok(serde_json::json!({"output": "SENT"})) });
+        Ok(vec![Arc::new(list), Arc::new(draft), Arc::new(send)])
+    }
+}
+
+/// The gate tests share the process-wide permission store for the `anonymous` tool-context
+/// user, so they run one at a time.
+fn gate_lock() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+async fn gated_tools(agent: &str) -> std::collections::HashMap<String, Arc<dyn adk_core::Tool>> {
+    let gate = spatial_os::permissions::PermissionGate::wrap(agent, Arc::new(FakeInboxTools));
+    let ctx: Arc<dyn adk_core::ReadonlyContext> = Arc::new(adk_tool::SimpleToolContext::new("test"));
+    gate.tools(ctx).await.unwrap().into_iter().map(|t| (t.name().to_string(), t)).collect()
+}
+
+fn tool_ctx(session: &str) -> Arc<dyn adk_core::ToolContext> {
+    Arc::new(adk_tool::SimpleToolContext::new("gate-test").with_session_id(session))
+}
+
+#[test]
+fn effects_cover_every_allowlisted_tool() {
+    use spatial_os::permissions::Effect;
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+    let path = common::manifest_dir().join("mcp_allowlists.toml");
+    let catalog = AllowlistCatalog::from_file(&path).expect("catalog");
+    let missing = catalog.validate_effects(true).expect("every tool classified");
+    assert!(missing.is_empty());
+    assert_eq!(catalog.effect_for("inbox_agent", "list_inbox"), Some(Effect::Read));
+    assert_eq!(catalog.effect_for("inbox_agent", "create_draft"), Some(Effect::WriteLocal));
+    assert_eq!(catalog.effect_for("excel_agent", "write_cells"), Some(Effect::WriteLocal));
+    // Unclassified / unknown tools are treated as the most restrictive non-financial effect.
+    assert_eq!(spatial_os::tools::allowlist::effect_for("inbox_agent", "send_anything"), Effect::SendExternal);
+    assert!(spatial_os::tools::allowlist::EFFECTS_REQUIRED);
+}
+
+#[tokio::test]
+async fn gate_observe_allows_reads_and_denies_writes() {
+    let _serial = gate_lock().lock().await;
+    use spatial_os::permissions::{gate, Mode};
+    let svc = gate::services();
+    let user = adk_tool::SimpleToolContext::new("x").user_id().to_string();
+    svc.permissions.set_mode(&user, "inbox_agent", Mode::Observe).await;
+    let tools = gated_tools("inbox_agent").await;
+
+    let read = tools["list_inbox"].execute(tool_ctx("s-observe"), serde_json::json!({})).await.unwrap();
+    assert_eq!(read["output"], "[]");
+    let write = tools["create_draft"].execute(tool_ctx("s-observe"), serde_json::json!({"to": "a@b"})).await.unwrap();
+    assert_eq!(write["status"], "denied");
+    assert!(write["message"].as_str().unwrap().contains("observe mode"));
+    assert!(tools["list_inbox"].is_read_only());
+    assert!(!tools["create_draft"].is_read_only());
+
+    let denied = svc.audit.list(&user, 50).await.into_iter().filter(|e| e.decision == "denied" && e.tool == "create_draft").count();
+    assert!(denied >= 1);
+    svc.permissions.set_mode(&user, "inbox_agent", Mode::Suggest).await;
+}
+
+#[tokio::test]
+async fn gate_suggest_runs_local_writes_and_queues_external_sends() {
+    let _serial = gate_lock().lock().await;
+    use spatial_os::permissions::{gate, Mode, PendingStatus};
+    let svc = gate::services();
+    let user = adk_tool::SimpleToolContext::new("x").user_id().to_string();
+    svc.permissions.set_mode(&user, "inbox_agent", Mode::Suggest).await;
+    let tools = gated_tools("inbox_agent").await;
+
+    let draft = tools["create_draft"].execute(tool_ctx("s-suggest"), serde_json::json!({"to": "a@b", "body": "hi"})).await.unwrap();
+    assert_eq!(draft["output"], "draft ok", "write_local runs immediately in suggest mode");
+
+    let send = tools["send_anything"].execute(tool_ctx("s-suggest"), serde_json::json!({"thread_id": "t-1", "body": "secret"})).await.unwrap();
+    assert_eq!(send["status"], "queued_for_approval");
+    let id: uuid::Uuid = send["action_id"].as_str().unwrap().parse().unwrap();
+    let pending = svc.pending.get(id).await.expect("pending action");
+    assert_eq!(pending.status, PendingStatus::Pending);
+    assert_eq!(pending.session_id.as_deref(), Some("s-suggest"));
+    assert!(pending.summary.contains("send_anything"));
+    assert!(pending.summary.contains("thread_id"), "summary lists argument keys");
+    assert!(!pending.summary.contains("secret"), "summary never carries argument values");
+
+    // The ledger saw the call, content-free, with the subject hashed.
+    svc.ledger.flush().await;
+    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    let calls = svc
+        .ledger
+        .query(&spatial_os::intelligence::LedgerQuery { user_id: user.clone(), kind: Some("tool_call".into()), agent_id: Some("inbox_agent".into()), ..Default::default() })
+        .await;
+    let queued = calls.iter().find(|e| e.meta["decision"] == "queued").expect("queued tool_call in ledger");
+    assert_eq!(queued.subject_hash.as_ref().map(String::len), Some(24));
+    assert!(serde_json::to_string(&queued.meta).unwrap().contains("send_external"));
+    assert!(!serde_json::to_string(queued).unwrap().contains("secret"));
+
+    // Approval executes the un-gated tool and audits it.
+    let state = offline_app_state();
+    let resolved = spatial_os::routes::actions::approve_one(&state, &user, pending).await;
+    assert_eq!(resolved.status, PendingStatus::Approved);
+    assert_eq!(resolved.result.as_ref().unwrap()["output"], "SENT");
+    let approved = svc.audit.list(&user, 50).await.into_iter().filter(|e| e.decision == "approved" && e.approval_id == Some(id)).count();
+    assert_eq!(approved, 1);
+}
+
+#[tokio::test]
+async fn gate_pause_blocks_writes_and_resume_restores() {
+    let _serial = gate_lock().lock().await;
+    use spatial_os::permissions::{gate, Mode, PauseScope};
+    use spatial_os::domain::Domain;
+    let svc = gate::services();
+    let user = adk_tool::SimpleToolContext::new("x").user_id().to_string();
+    svc.permissions.set_mode(&user, "inbox_agent", Mode::Suggest).await;
+    let tools = gated_tools("inbox_agent").await;
+
+    svc.permissions.pause(PauseScope::Work, None).await;
+    assert!(svc.permissions.is_paused(Domain::Work).await);
+    assert!(!svc.permissions.is_paused(Domain::Home).await);
+    let paused = tools["create_draft"].execute(tool_ctx("s-pause"), serde_json::json!({})).await.unwrap();
+    assert_eq!(paused["status"], "paused");
+    let read = tools["list_inbox"].execute(tool_ctx("s-pause"), serde_json::json!({})).await.unwrap();
+    assert_eq!(read["output"], "[]", "reads keep working while paused");
+    svc.permissions.resume(PauseScope::Work).await;
+    let ok = tools["create_draft"].execute(tool_ctx("s-pause"), serde_json::json!({})).await.unwrap();
+    assert_eq!(ok["output"], "draft ok");
+}
+
+#[tokio::test]
+async fn permission_store_resolves_override_then_user_then_default() {
+    use spatial_os::permissions::{Mode, PermissionStore};
+    let store = PermissionStore::in_memory();
+    assert_eq!(store.mode_for("u", "money_agent", None).await, Mode::Observe, "catalog default");
+    assert_eq!(store.mode_for("u", "inbox_agent", None).await, Mode::Suggest);
+    store.set_mode("u", "inbox_agent", Mode::Observe).await;
+    assert_eq!(store.mode_for("u", "inbox_agent", Some("create_draft")).await, Mode::Observe);
+    store.set_tool_override("u", "inbox_agent", "create_draft", Some(Mode::Suggest)).await;
+    assert_eq!(store.mode_for("u", "inbox_agent", Some("create_draft")).await, Mode::Suggest);
+    assert_eq!(store.mode_for("u", "inbox_agent", Some("list_inbox")).await, Mode::Observe);
+    store.set_tool_override("u", "inbox_agent", "create_draft", None).await;
+    assert_eq!(store.mode_for("u", "inbox_agent", Some("create_draft")).await, Mode::Observe);
+    let view = store.list("u").await;
+    let inbox = view.iter().find(|a| a.agent_id == "inbox_agent").unwrap();
+    assert_eq!(inbox.mode, Mode::Observe);
+    assert_eq!(inbox.default_mode, Mode::Suggest);
+    assert!(inbox.tools.iter().any(|t| t.name == "create_draft" && t.effect == "write_local"));
+}
+
+#[tokio::test]
+async fn pending_actions_batch_approve_and_reject_via_routes() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::domain::Domain;
+    use spatial_os::permissions::{Effect, PendingStatus};
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-actions".into()).await;
+    let a = state.pending.create(&rec.user_id, Some(&rec.session_id), "inbox_agent", Domain::Work, "send_anything", Effect::SendExternal, serde_json::json!({}), None).await;
+    let b = state.pending.create(&rec.user_id, Some(&rec.session_id), "inbox_agent", Domain::Work, "send_anything", Effect::SendExternal, serde_json::json!({}), None).await;
+    let c = state.pending.create(&rec.user_id, Some(&rec.session_id), "calendar_agent", Domain::Work, "create_event", Effect::ScheduleWithOthers, serde_json::json!({}), None).await;
+
+    let app = axum::Router::new()
+        .route("/api/actions", axum::routing::get(spatial_os::routes::actions::list))
+        .route("/api/actions/approve", axum::routing::post(spatial_os::routes::actions::approve_batch))
+        .route("/api/actions/{id}/reject", axum::routing::post(spatial_os::routes::actions::reject))
+        .with_state(state.clone());
+
+    // Anonymous callers hit the AWP trust gate.
+    let anon = app.clone().oneshot(Request::get(format!("/api/actions?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(anon.status(), StatusCode::FORBIDDEN);
+
+    let mut req = Request::get(format!("/api/actions?session_id={}", rec.session_id)).body(Body::empty()).unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(json["actions"].as_array().unwrap().len(), 3);
+
+    let mut req = Request::post("/api/actions/approve")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id": rec.session_id, "ids": [a.id, b.id]}).to_string()))
+        .unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    // Fake tools were registered by the gate tests under inbox_agent, so approval executes (or
+    // fails honestly when the registry has no such tool) — either way the action is resolved.
+    assert!(matches!(state.pending.get(a.id).await.unwrap().status, PendingStatus::Approved | PendingStatus::Failed));
+    assert!(matches!(state.pending.get(b.id).await.unwrap().status, PendingStatus::Approved | PendingStatus::Failed));
+
+    let mut req = Request::post(format!("/api/actions/{}/reject", c.id))
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id": rec.session_id}).to_string()))
+        .unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(state.pending.get(c.id).await.unwrap().status, PendingStatus::Rejected);
+    assert!(state.audit.count(&rec.user_id, Some("rejected")).await >= 1);
+}
+
+#[tokio::test]
+async fn permission_routes_set_mode_and_pause() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::domain::Domain;
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-perms".into()).await;
+    let app = axum::Router::new()
+        .route("/api/permissions", axum::routing::get(spatial_os::routes::permissions::get).put(spatial_os::routes::permissions::put))
+        .route("/api/pause", axum::routing::post(spatial_os::routes::permissions::pause))
+        .route("/api/resume", axum::routing::post(spatial_os::routes::permissions::resume))
+        .with_state(state.clone());
+
+    let mut req = Request::put("/api/permissions")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id": rec.session_id, "agent_id": "money_agent", "mode": "automate"}).to_string()))
+        .unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(json["agent"]["mode"], "automate");
+    assert_eq!(json["agent"]["default_mode"], "observe");
+
+    let mut req = Request::post("/api/pause")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id": rec.session_id, "scope": "home", "minutes": 30}).to_string()))
+        .unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(state.permissions.is_paused(Domain::Home).await);
+    assert!(!state.permissions.is_paused(Domain::Work).await);
+
+    let mut req = Request::post("/api/resume")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"session_id": rec.session_id, "scope": "home"}).to_string()))
+        .unwrap();
+    req.headers_mut().extend(headers.clone());
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(!state.permissions.is_paused(Domain::Home).await);
+}
+
+#[tokio::test]
+async fn ledger_records_mother_intents_and_ui_events() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+    use tower::ServiceExt;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-ledger".into()).await;
+    let response = dispatch_intent(IntentDispatch { state: &state, session_id: rec.session_id.clone(), user_id: rec.user_id.clone(), text: "Build me a pitch deck".into() }).await;
+    let _ = collect_sse_events(response).await;
+
+    let app = axum::Router::new()
+        .route("/api/sessions/{session_id}/events", axum::routing::post(spatial_os::routes::events::record))
+        .with_state(state.clone());
+    let res = app
+        .oneshot(
+            Request::post(format!("/api/sessions/{}/events", rec.session_id))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"events":[{"kind":"ui_notification","count":4,"domain":"work"},{"kind":"ui_secret","count":1}]}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::ACCEPTED);
+
+    state.ledger.flush().await;
+    let intents = state.ledger.query(&spatial_os::intelligence::LedgerQuery { user_id: rec.user_id.clone(), kind: Some("intent".into()), ..Default::default() }).await;
+    assert_eq!(intents.len(), 1);
+    assert_eq!(intents[0].meta["scenario"], "deck");
+    assert_eq!(intents[0].meta["entry"], "intent");
+    let ui = state.ledger.query(&spatial_os::intelligence::LedgerQuery { user_id: rec.user_id.clone(), agent_id: Some("ui".into()), ..Default::default() }).await;
+    assert_eq!(ui.len(), 1, "unknown UI kinds are ignored");
+    assert_eq!(ui[0].kind, "ui_notification");
+    assert_eq!(ui[0].meta["count"], 4);
+}
+
+#[tokio::test]
+async fn commit_creates_an_approved_action_with_audit() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-commit".into()).await;
+    state.sessions.set_scenario(&rec.session_id, "morning", Some("Start my day")).await;
+    state.sessions.upsert_card(&rec.session_id, 1, serde_json::json!({"title":"Needs you","agent":"inbox.agent"}), "resolved", None, false).await;
+    let app = axum::Router::new()
+        .route("/api/sessions/{session_id}/commit", axum::routing::post(spatial_os::routes::commit::commit_action))
+        .with_state(state.clone());
+    let mut req = Request::post(format!("/api/sessions/{}/commit", rec.session_id))
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"card_title":"Needs you","action_label":"Draft replies"}"#))
+        .unwrap();
+    req.headers_mut().extend(headers);
+    let res = app.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    let id: uuid::Uuid = json["action_id"].as_str().unwrap().parse().unwrap();
+    let action = state.pending.get(id).await.unwrap();
+    assert_eq!(action.status, spatial_os::permissions::PendingStatus::Approved);
+    assert_eq!(action.agent_id, "inbox_agent");
+    assert_eq!(action.effect, spatial_os::permissions::Effect::WriteLocal);
+    assert!(state.audit.list(&rec.user_id, 10).await.iter().any(|e| e.approval_id == Some(id) && e.decision == "approved"));
+}
+
+#[test]
+fn sse_permission_request_event_shape() {
+    use spatial_os::domain::Domain;
+    use spatial_os::events::sse::FieldEvent;
+    let ev = FieldEvent::PermissionRequest {
+        action_id: "a1".into(),
+        agent_id: "inbox_agent".into(),
+        domain: Domain::Work,
+        effect: "send_external".into(),
+        summary: "inbox_agent · send_draft (send_external) with draft_id".into(),
+        expires_at: "2026-10-01T00:00:00Z".into(),
+    };
+    let json = serde_json::to_value(&ev).unwrap();
+    assert_eq!(json["type"], "permission_request");
+    assert_eq!(json["domain"], "work");
+}
+
+/// `AppState` whose AWP gate verifies JWTs, plus a `Bearer` header for a known user.
+fn known_app_state() -> (spatial_os::state::AppState, axum::http::HeaderMap) {
+    use adk_awp::BusinessContextLoader;
+    let mut state = offline_app_state();
+    let path = common::manifest_dir().join("business.toml");
+    let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
+    state.awp = Arc::new(spatial_os::awp_gate::AwpGate::new(Some("test-secret".into()), loader.context_ref()));
+    let token = spatial_os::auth::create_token(uuid::Uuid::new_v4(), "test-secret").expect("jwt");
+    let mut headers = axum::http::HeaderMap::new();
+    headers.insert("authorization", format!("Bearer {token}").parse().unwrap());
+    (state, headers)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 · S3 — personal memory
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn memory_propose_confirm_correct_forget_export() {
+    use spatial_os::domain::Domain;
+    use spatial_os::memory::{Kind, MemoryService, NewItem, Provenance, Scope, Sensitivity};
+    let m = MemoryService::in_memory();
+
+    let proposed = m
+        .propose("u", 0.8, NewItem {
+            domain: Domain::Work,
+            category: "routine",
+            key: "routine.work.start",
+            value: serde_json::json!("09:40"),
+            sensitivity: Sensitivity::Normal,
+            source_agent: "patterns",
+            provenance: Provenance::new("pattern").agent("patterns").note("28-day median"),
+        })
+        .await;
+    assert_eq!(proposed.kind, Kind::Assumed);
+    assert_eq!(proposed.confidence, Some(0.8));
+    assert_eq!(proposed.note(), "routine.work.start: 09:40 (I think)");
+
+    // The user's statement wins and a later proposal cannot override it.
+    let known = m
+        .remember("u", NewItem {
+            domain: Domain::Work,
+            category: "preference",
+            key: "preference.meetings.earliest_start",
+            value: serde_json::json!("10:00"),
+            sensitivity: Sensitivity::Normal,
+            source_agent: "mother",
+            provenance: Provenance::new("user_statement"),
+        })
+        .await;
+    assert_eq!(known.kind, Kind::Known);
+    let again = m
+        .propose("u", 0.9, NewItem {
+            domain: Domain::Work,
+            category: "preference",
+            key: "preference.meetings.earliest_start",
+            value: serde_json::json!("09:00"),
+            sensitivity: Sensitivity::Normal,
+            source_agent: "calendar_agent",
+            provenance: Provenance::new("agent_proposal"),
+        })
+        .await;
+    assert_eq!(again.kind, Kind::Known);
+    assert_eq!(again.value, serde_json::json!("10:00"));
+
+    // Confirm promotes with provenance; correct changes the value and promotes.
+    let confirmed = m.confirm("u", proposed.id, Some("s1")).await.unwrap();
+    assert_eq!(confirmed.kind, Kind::Known);
+    assert_eq!(confirmed.provenance.last().unwrap().kind, "user_confirmation");
+    assert_eq!(confirmed.provenance.len(), 2);
+    let corrected = m.correct("u", proposed.id, serde_json::json!("09:30"), None).await.unwrap();
+    assert_eq!(corrected.value, serde_json::json!("09:30"));
+    assert_eq!(corrected.provenance.last().unwrap().kind, "user_correction");
+
+    // Export carries provenance; forget soft-deletes; purge removes everything.
+    let export = m.export("u").await;
+    assert_eq!(export.len(), 2);
+    assert!(export.iter().all(|i| !i.provenance.is_empty()));
+    m.forget("u", known.id).await.unwrap();
+    assert_eq!(m.export("u").await.len(), 1);
+    assert_eq!(m.purge("u").await, 2);
+    assert!(m.export("u").await.is_empty());
+    let _ = Scope::MOTHER;
+}
+
+#[tokio::test]
+async fn memory_scopes_isolate_worlds_for_agent_tools() {
+    use spatial_os::domain::Domain;
+    use spatial_os::memory::{service_handle, NewItem, Provenance, Sensitivity};
+    let m = service_handle();
+    let user = adk_tool::SimpleToolContext::new("x").user_id().to_string();
+    m.remember(&user, NewItem { domain: Domain::Home, category: "date", key: "date.birthday.sara", value: serde_json::json!("20 Oct"), sensitivity: Sensitivity::Normal, source_agent: "user", provenance: Provenance::new("user_statement") }).await;
+    m.remember(&user, NewItem { domain: Domain::Shared, category: "profile", key: "profile.timezone", value: serde_json::json!("Africa/Nairobi"), sensitivity: Sensitivity::Normal, source_agent: "user", provenance: Provenance::new("user_statement") }).await;
+
+    let ctx: Arc<dyn adk_core::ToolContext> = Arc::new(adk_tool::SimpleToolContext::new("scope-test"));
+    // inbox_agent lives in Work: sees shared, not home.
+    let work_read = spatial_os::memory::tools::read_memory_tool("inbox_agent");
+    let out = work_read.execute(ctx.clone(), serde_json::json!({})).await.unwrap();
+    let keys: Vec<&str> = out["items"].as_array().unwrap().iter().map(|i| i["key"].as_str().unwrap()).collect();
+    assert!(keys.contains(&"profile.timezone"));
+    assert!(!keys.contains(&"date.birthday.sara"), "work agent must not read home memory");
+    // The Mother reads across.
+    let mother_read = spatial_os::memory::tools::read_memory_tool("mother");
+    let out = mother_read.execute(ctx.clone(), serde_json::json!({"keys": ["date."]})).await.unwrap();
+    assert_eq!(out["items"].as_array().unwrap().len(), 1);
+    // A work agent cannot propose into the home domain; its own domain is fine and lands as assumed.
+    let propose = spatial_os::memory::tools::propose_memory_tool("inbox_agent");
+    let rejected = propose.execute(ctx.clone(), serde_json::json!({"key": "x", "value": 1, "domain": "home"})).await.unwrap();
+    assert_eq!(rejected["status"], "rejected");
+    let ok = propose.execute(ctx, serde_json::json!({"key": "preference.email.tone", "value": "brief", "confidence": 0.7})).await.unwrap();
+    assert_eq!(ok["status"], "proposed");
+    assert_eq!(ok["kind"], "assumed");
+}
+
+#[tokio::test]
+async fn memory_routes_remember_confirm_export_purge() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-memory-routes".into()).await;
+    let app = axum::Router::new()
+        .route("/api/memory", axum::routing::get(spatial_os::routes::memory::list).post(spatial_os::routes::memory::remember).delete(spatial_os::routes::memory::purge))
+        .route("/api/memory/export", axum::routing::get(spatial_os::routes::memory::export))
+        .route("/api/memory/{id}", axum::routing::patch(spatial_os::routes::memory::patch).delete(spatial_os::routes::memory::forget))
+        .with_state(state.clone());
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        let headers = headers.clone();
+        async move {
+            let mut req = req;
+            req.headers_mut().extend(headers);
+            app.oneshot(req).await.unwrap()
+        }
+    };
+    let json = |body: serde_json::Value| Body::from(body.to_string());
+
+    // Anonymous is refused.
+    let anon = app.clone().oneshot(Request::get(format!("/api/memory?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(anon.status(), StatusCode::FORBIDDEN);
+
+    let res = send(Request::post("/api/memory").header("content-type", "application/json").body(json(serde_json::json!({"session_id": rec.session_id, "domain": "shared", "category": "profile", "key": "profile.home_location", "value": "Nairobi"}))).unwrap()).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let item: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(item["kind"], "known");
+
+    // An assumed item shows up with kind and can be confirmed through PATCH.
+    let assumed = state.memory.propose(&rec.user_id, 0.6, spatial_os::memory::NewItem { domain: spatial_os::domain::Domain::Work, category: "routine", key: "routine.work.end", value: serde_json::json!("17:30"), sensitivity: spatial_os::memory::Sensitivity::Normal, source_agent: "patterns", provenance: spatial_os::memory::Provenance::new("pattern") }).await;
+    let res = send(Request::get(format!("/api/memory?session_id={}&kind=assumed", rec.session_id)).body(Body::empty()).unwrap()).await;
+    let list: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(list["items"].as_array().unwrap().len(), 1);
+    let res = send(Request::patch(format!("/api/memory/{}", assumed.id)).header("content-type", "application/json").body(json(serde_json::json!({"session_id": rec.session_id, "op": "confirm"}))).unwrap()).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let confirmed: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(confirmed["kind"], "known");
+    assert_eq!(confirmed["provenance"].as_array().unwrap().last().unwrap()["kind"], "user_confirmation");
+
+    let res = send(Request::get(format!("/api/memory/export?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await;
+    let export: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap();
+    assert_eq!(export["format"], "zavora-memory-export/v1");
+    assert_eq!(export["items"].as_array().unwrap().len(), 2);
+
+    // The greeting route uses the remembered home location.
+    assert_eq!(state.memory.profile(&rec.user_id, "home_location").await.as_deref(), Some("Nairobi"));
+
+    let res = send(Request::delete(format!("/api/memory?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(state.memory.export(&rec.user_id).await.is_empty());
+}
+
+#[tokio::test]
+async fn memory_chat_statements_are_handled_by_the_mother() {
+    use spatial_os::memory::Kind;
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-memory-chat".into()).await;
+    let run = |text: &str| {
+        let state = state.clone();
+        let sid = rec.session_id.clone();
+        let uid = rec.user_id.clone();
+        let text = text.to_string();
+        async move {
+            let r = dispatch_intent(IntentDispatch { state: &state, session_id: sid, user_id: uid, text }).await;
+            collect_sse_events(r).await
+        }
+    };
+
+    let events = run("Remember I never take meetings before 10").await;
+    assert_eq!(events[0]["type"], "suzy_summary");
+    assert_eq!(events[0]["key"], "mother");
+    assert!(events[0]["html"].as_str().unwrap().contains("I'll remember"));
+    assert_eq!(events.len(), 2, "a memory statement is a one-shot reply, no cards");
+    let items = state.memory.export(&rec.user_id).await;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].kind, Kind::Known);
+    assert_eq!(items[0].key, "preference.meetings.earliest_start");
+    assert_eq!(items[0].provenance[0].kind, "user_statement");
+
+    // Synthesis cites the kind when it composes a multi-target answer.
+    let events = run("What's happening with work?").await;
+    let summary = events.iter().find(|e| e["type"] == "suzy_summary").unwrap();
+    assert!(summary["html"].as_str().unwrap().contains("(you told me)"), "{}", summary["html"]);
+
+    let events = run("why do you think that").await;
+    assert!(events[0]["html"].as_str().unwrap().contains("not assuming anything"));
+
+    let events = run("forget meetings").await;
+    assert!(events[0]["html"].as_str().unwrap().contains("Forgotten"));
+    assert!(state.memory.export(&rec.user_id).await.is_empty());
+
+    state.ledger.flush().await;
+    let stmts = state.ledger.query(&spatial_os::intelligence::LedgerQuery { user_id: rec.user_id.clone(), kind: Some("memory_statement".into()), ..Default::default() }).await;
+    assert_eq!(stmts.len(), 3);
+    assert!(stmts.iter().all(|e| !serde_json::to_string(e).unwrap().contains("meetings")), "the ledger never carries the statement text");
+}
+
+#[test]
+fn business_toml_lists_r1_capabilities() {
+    use adk_awp::BusinessContextLoader;
+    let path = common::manifest_dir().join("business.toml");
+    let ctx = BusinessContextLoader::from_file(&path).expect("business.toml").load();
+    let names: Vec<&str> = ctx.capabilities.iter().map(|c| c.name.as_str()).collect();
+    for cap in ["chat_mother", "list_actions", "approve_action", "get_permissions", "set_permissions", "pause_agents", "record_ui_events", "manage_memory"] {
+        assert!(names.contains(&cap), "missing capability {cap}");
+    }
+    let known: Vec<&str> = ctx.capabilities.iter().filter(|c| c.access_level == awp_types::TrustLevel::Known).map(|c| c.name.as_str()).collect();
+    for cap in ["approve_action", "set_permissions", "pause_agents", "manage_memory"] {
+        assert!(known.contains(&cap), "{cap} must require known trust");
+    }
 }

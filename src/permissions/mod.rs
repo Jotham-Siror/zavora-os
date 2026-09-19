@@ -1,7 +1,18 @@
 //! Authority model: Observe / Suggest / Automate × tool effect class (ADR-003).
 //!
-//! S0 ships the types and the pure decision matrix (§10.2 of `docs/PERSONAL_AI_OS.md`).
-//! S2 adds the `PermissionGate` toolset wrapper, pending actions and the audit log.
+//! - types and the pure decision matrix (§10.2 of `docs/PERSONAL_AI_OS.md`) — S0
+//! - [`store`] per-user modes and the pause switch, [`pending`] actions awaiting approval,
+//!   [`audit`] log, and the [`gate`] toolset wrapper that enforces all of it — S2
+
+pub mod audit;
+pub mod gate;
+pub mod pending;
+pub mod store;
+
+pub use audit::{AuditEntry, AuditLog};
+pub use gate::{execute_approved, PermissionGate, PermissionServices, ToolRegistry};
+pub use pending::{PendingAction, PendingActions, PendingEvent, PendingStatus};
+pub use store::{AgentPermission, AgentPermissionView, PauseScope, PermissionStore};
 
 use serde::{Deserialize, Serialize};
 

@@ -416,6 +416,16 @@ pub struct AppState {
     pub suzy_runner: Option<Arc<Runner>>,
     /// LLM half of the Mother Agent (S1-T2); `None` without an API key.
     pub mother_runner: Option<Arc<Runner>>,
+    /// Content-free activity ledger (S2-T1). Same instance the permission gate writes to.
+    pub ledger: crate::intelligence::LedgerService,
+    /// Per-user authority modes and the pause switch (S2-T8).
+    pub permissions: crate::permissions::PermissionStore,
+    /// Actions waiting for approval (S2-T7).
+    pub pending: crate::permissions::PendingActions,
+    /// Audit log of every executed / queued / denied effect (S2-T6).
+    pub audit: crate::permissions::AuditLog,
+    /// Personal memory — known · assumed · recommended (S3).
+    pub memory: crate::memory::MemoryService,
     pub session_service: SharedSessionService,
     pub auth: Option<Arc<crate::auth::AuthState>>,
     pub awp: Arc<crate::awp_gate::AwpGate>,
@@ -484,6 +494,11 @@ impl AppState {
             router_runner,
             suzy_runner,
             mother_runner: None,
+            ledger: crate::permissions::gate::services().ledger.clone(),
+            permissions: crate::permissions::gate::services().permissions.clone(),
+            pending: crate::permissions::gate::services().pending.clone(),
+            audit: crate::permissions::gate::services().audit.clone(),
+            memory: crate::memory::service_handle().clone(),
             session_service,
             auth,
             awp,

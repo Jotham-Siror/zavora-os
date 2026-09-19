@@ -51,6 +51,55 @@ method = "POST"
 access_level = "anonymous"
 
 [[capabilities]]
+name = "list_actions"
+description = "Pending actions awaiting approval (and GET /api/audit — the audit log of executed, queued and denied effects)"
+endpoint = "/api/actions"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
+name = "approve_action"
+description = "Approve, reject or edit a pending action (POST /api/actions/{id}/approve|reject|edit; POST /api/actions/approve for a batch). Approval executes the tool with the user as the authority and writes an audit row"
+endpoint = "/api/actions/{action_id}/approve"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "get_permissions"
+description = "Every agent's authority mode (observe | suggest | automate), tool effect classes and overrides, plus the pause state"
+endpoint = "/api/permissions"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
+name = "set_permissions"
+description = "Set an agent's mode or a per-tool override"
+endpoint = "/api/permissions"
+method = "PUT"
+access_level = "known"
+
+[[capabilities]]
+name = "pause_agents"
+description = "Pause every write for all agents or one world (POST /api/pause), resume with POST /api/resume; pausing everything also sets DND"
+endpoint = "/api/pause"
+method = "POST"
+access_level = "known"
+
+[[capabilities]]
+name = "record_ui_events"
+description = "Content-free UI signals (focus, notification counts, card opens per domain) for the activity ledger"
+endpoint = "/api/sessions/{session_id}/events"
+method = "POST"
+access_level = "anonymous"
+
+[[capabilities]]
+name = "manage_memory"
+description = "Personal memory — list (GET), state a fact (POST → known), confirm or correct (PATCH /api/memory/{id}), forget (DELETE /api/memory/{id}), export (GET /api/memory/export), delete everything (DELETE). Every item shows kind = known | assumed | recommended and its provenance"
+endpoint = "/api/memory"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
 name = "submit_action"
 description = "Submit an action turn (combine, handle it, …) and receive conduct SSE events"
 endpoint = "/api/sessions/{session_id}/action"
@@ -185,7 +234,7 @@ access_level = "known"
 
 [[policies]]
 name = "privacy"
-description = "Sessions persist to Postgres when DATABASE_URL is set; otherwise in-memory per process."
+description = "Sessions persist to Postgres when DATABASE_URL is set; otherwise in-memory per process. The activity ledger is content-free (hashed subjects, counts and durations only); pending-action arguments are the only stored content and are held for at most 48 hours after resolution."
 policy_type = "privacy"
 
 [[policies]]

@@ -25,6 +25,18 @@ tools = [
   "set_cell_format",
 ]
 
+[allowlist.effects]
+create_workbook = "write_local"
+open_workbook = "read"
+save_workbook = "write_local"
+write_cells = "write_local"
+write_column = "write_local"
+write_row = "write_local"
+add_chart = "write_local"
+describe_workbook = "read"
+list_sheets = "read"
+set_cell_format = "write_local"
+
 [[allowlist]]
 agent = "docs_agent"
 world = "work"
@@ -40,6 +52,14 @@ tools = [
   "list_templates",
 ]
 
+[allowlist.effects]
+create_document = "write_local"
+insert_paragraph = "write_local"
+save_document = "write_local"
+read_paragraphs = "read"
+document_outline = "read"
+list_templates = "read"
+
 [[allowlist]]
 agent = "slides_agent"
 world = "work"
@@ -54,6 +74,14 @@ tools = [
   "list_templates",
   "render_slide",
 ]
+
+[allowlist.effects]
+create_presentation = "write_local"
+add_slide = "write_local"
+save_presentation = "write_local"
+describe_presentation = "read"
+list_templates = "read"
+render_slide = "read"
 
 [[allowlist]]
 agent = "combine_agent"
@@ -77,6 +105,21 @@ tools = [
   "render_slide",
 ]
 
+[allowlist.effects]
+open_presentation = "read"
+describe_presentation = "read"
+read_slide = "read"
+to_markdown = "read"
+add_slide = "write_local"
+add_bullets = "write_local"
+set_title = "write_local"
+add_table = "write_local"
+set_table_cell = "write_local"
+add_text_box = "write_local"
+set_notes = "write_local"
+save_presentation = "write_local"
+render_slide = "read"
+
 [[allowlist]]
 agent = "calendar_agent"
 world = "work"
@@ -91,6 +134,13 @@ tools = [
   "list_calendars",
 ]
 
+[allowlist.effects]
+get_today = "read"
+list_events = "read"
+find_free_time = "read"
+search_events = "read"
+list_calendars = "read"
+
 [[allowlist]]
 agent = "inbox_agent"
 world = "work"
@@ -98,6 +148,12 @@ mode = "suggest"
 mcp_server = "email"
 reason = "Morning inbox card"
 tools = ["list_inbox", "search_emails", "create_draft", "get_email"]
+
+[allowlist.effects]
+list_inbox = "read"
+search_emails = "read"
+create_draft = "write_local"
+get_email = "read"
 
 [[allowlist]]
 agent = "brief_agent"
@@ -107,6 +163,11 @@ mcp_server = "news"
 reason = "Today brief — headlines"
 tools = ["gnews_top_headlines", "search_news", "get_country_news"]
 
+[allowlist.effects]
+gnews_top_headlines = "read"
+search_news = "read"
+get_country_news = "read"
+
 [[allowlist]]
 agent = "brief_agent"
 world = "shared"
@@ -114,6 +175,10 @@ mode = "observe"
 mcp_server = "weather"
 reason = "Today brief — forecast"
 tools = ["get_forecast", "geocode_location"]
+
+[allowlist.effects]
+get_forecast = "read"
+geocode_location = "read"
 
 [[allowlist]]
 agent = "headlines_agent"
@@ -128,6 +193,12 @@ tools = [
   "get_trending_topics",
 ]
 
+[allowlist.effects]
+gnews_top_headlines = "read"
+search_news = "read"
+get_country_news = "read"
+get_trending_topics = "read"
+
 [[allowlist]]
 agent = "markets_agent"
 world = "home"
@@ -135,6 +206,9 @@ mode = "observe"
 mcp_server = "news"
 reason = "Live markets — trending context"
 tools = ["get_trending_topics"]
+
+[allowlist.effects]
+get_trending_topics = "read"
 
 [[allowlist]]
 agent = "markets_agent"
@@ -144,6 +218,9 @@ mcp_server = "market_data"
 reason = "Live markets — quotes"
 tools = ["yfinance_chart"]
 
+[allowlist.effects]
+yfinance_chart = "read"
+
 [[allowlist]]
 agent = "now_agent"
 world = "home"
@@ -151,6 +228,11 @@ mode = "observe"
 mcp_server = "news"
 reason = "Live now strip"
 tools = ["gnews_top_headlines", "get_trending_topics", "search_news"]
+
+[allowlist.effects]
+gnews_top_headlines = "read"
+get_trending_topics = "read"
+search_news = "read"
 
 [[allowlist]]
 agent = "team_agent"
@@ -165,6 +247,12 @@ tools = [
   "list_dms",
 ]
 
+[allowlist.effects]
+list_channels = "read"
+get_channel_history = "read"
+search_messages = "read"
+list_dms = "read"
+
 [[allowlist]]
 agent = "priya_agent"
 world = "work"
@@ -172,6 +260,12 @@ mode = "suggest"
 mcp_server = "calendar"
 reason = "People rail — Priya calendar"
 tools = ["list_events", "search_events", "find_free_time", "get_today"]
+
+[allowlist.effects]
+list_events = "read"
+search_events = "read"
+find_free_time = "read"
+get_today = "read"
 
 [[allowlist]]
 agent = "connections_agent"
@@ -186,6 +280,12 @@ tools = [
   "list_deals",
 ]
 
+[allowlist.effects]
+search_contacts = "read"
+list_contacts = "read"
+list_activities = "read"
+list_deals = "read"
+
 [[allowlist]]
 agent = "money_agent"
 world = "home"
@@ -193,6 +293,11 @@ mode = "observe"
 mcp_server = "banking"
 reason = "Week rail — money"
 tools = ["list_transactions", "search_transactions", "list_accounts"]
+
+[allowlist.effects]
+list_transactions = "read"
+search_transactions = "read"
+list_accounts = "read"
 
 [[allowlist]]
 agent = "focus_agent"
@@ -202,6 +307,11 @@ mcp_server = "github"
 reason = "Week rail — engineering focus"
 tools = ["list_commits", "list_pull_requests", "search_repositories"]
 
+[allowlist.effects]
+list_commits = "read"
+list_pull_requests = "read"
+search_repositories = "read"
+
 [[allowlist]]
 agent = "planner_agent"
 world = "home"
@@ -209,6 +319,11 @@ mode = "suggest"
 mcp_server = "maps"
 reason = "Lisbon itinerary — POI and routes"
 tools = ["geocode", "search_poi", "get_route"]
+
+[allowlist.effects]
+geocode = "read"
+search_poi = "read"
+get_route = "read"
 
 [[allowlist]]
 agent = "planner_agent"
@@ -218,6 +333,10 @@ mcp_server = "weather"
 reason = "Lisbon itinerary — forecast"
 tools = ["get_forecast", "geocode_location"]
 
+[allowlist.effects]
+get_forecast = "read"
+geocode_location = "read"
+
 [[allowlist]]
 agent = "stay_agent"
 world = "home"
@@ -225,6 +344,11 @@ mode = "suggest"
 mcp_server = "real_estate"
 reason = "Lisbon stay search"
 tools = ["geocode_search", "search_properties_nearby", "us_search_properties"]
+
+[allowlist.effects]
+geocode_search = "read"
+search_properties_nearby = "read"
+us_search_properties = "read"
 
 [[allowlist]]
 agent = "research_agent"
@@ -234,6 +358,11 @@ mcp_server = "news"
 reason = "Ambient research"
 tools = ["gnews_top_headlines", "search_news", "get_trending_topics"]
 
+[allowlist.effects]
+gnews_top_headlines = "read"
+search_news = "read"
+get_trending_topics = "read"
+
 [[allowlist]]
 agent = "scout_agent"
 world = "home"
@@ -241,3 +370,6 @@ mode = "observe"
 mcp_server = "real_estate"
 reason = "Ambient scout — listings"
 tools = ["search_properties_nearby", "geocode_search"]
+[allowlist.effects]
+search_properties_nearby = "read"
+geocode_search = "read"

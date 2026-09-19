@@ -65,7 +65,10 @@ pub fn salutation_now() -> String {
     salutation_for_hour(chrono::Local::now().hour()).into()
 }
 
-pub async fn gather(pool: Option<&MorningMcpPool>) -> GreetingSnapshot {
+/// Default when the profile has no home location yet (the brand's own city).
+pub const DEFAULT_HOME_LOCATION: &str = "San Francisco";
+
+pub async fn gather(pool: Option<&MorningMcpPool>, home_location: Option<&str>) -> GreetingSnapshot {
     let mut snap = GreetingSnapshot {
         salutation: salutation_now(),
         ..Default::default()
@@ -96,7 +99,7 @@ pub async fn gather(pool: Option<&MorningMcpPool>) -> GreetingSnapshot {
         snap.news = Some(facts);
     }
 
-    if let Some(facts) = fetch_weather(pool.weather.clone()).await {
+    if let Some(facts) = fetch_weather(pool.weather.clone(), home_location.unwrap_or(DEFAULT_HOME_LOCATION)).await {
         snap.connected.push("weather".into());
         snap.weather = Some(facts);
     }
@@ -219,11 +222,11 @@ fn weather_code_label(code: i64) -> &'static str {
     }
 }
 
-async fn fetch_weather(toolset: Arc<dyn adk_core::Toolset>) -> Option<WeatherFacts> {
+async fn fetch_weather(toolset: Arc<dyn adk_core::Toolset>, location: &str) -> Option<WeatherFacts> {
     let geo = mcp_exec::exec_tool(
         toolset.clone(),
         "geocode_location",
-        serde_json::json!({ "name": "San Francisco" }),
+        serde_json::json!({ "name": location }),
     )
     .await?;
     let geo_out = mcp_exec::tool_output_string(&geo)?;

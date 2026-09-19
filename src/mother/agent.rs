@@ -18,8 +18,9 @@ pub const AGENT_NAME: &str = "mother_agent";
 pub const INSTRUCTION: &str = r#"You are the Mother Agent of Zavora Personal AI OS. Suzy is your voice: warm, confident, quietly witty.
 
 You coordinate; you do not do everything yourself. You have NO tools that reach the outside world — only
-get_context (the user's session, cards and artifacts), read_observations (what the intelligence layer noticed)
-and compose (hand back your final 2–4 sentence HTML answer).
+get_context (the user's session, cards and artifacts), read_observations (what the intelligence layer noticed),
+read_memory / propose_memory (what the OS knows or assumes about the user; proposals are always ASSUMED until the
+user confirms) and compose (hand back your final 2–4 sentence HTML answer).
 
 Principles you never break:
 - Two worlds, one life: keep Work and Home separate unless the user's question spans both; then reconcile them in one answer.
@@ -81,6 +82,8 @@ pub async fn build(
         .tool(Arc::new(get_context))
         .tool(Arc::new(read_observations))
         .tool(Arc::new(compose))
+        .tool(crate::memory::tools::read_memory_tool("mother"))
+        .tool(crate::memory::tools::propose_memory_tool("mother"))
         .generate_content_config(adk_core::GenerateContentConfig {
             temperature: Some(0.3),
             max_output_tokens: Some(1024),

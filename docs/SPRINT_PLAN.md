@@ -73,10 +73,10 @@ Holiday buffer: the illustrative calendar skips Dec 21 – Jan 1.
 
 | Sprint | Branch | Status | Tag |
 |---|---|---|---|
-| S0 | `phase2/S00-align` | ⬜ | `v1.0.1-p2` |
-| S1 | `phase2/S01-mother` | ⬜ | `v1.1.0-p2` |
-| S2 | `phase2/S02-ledger-permissions` | ⬜ | `v1.2.0-p2` |
-| S3 | `phase2/S03-memory` | ⬜ | `v1.3.0-p2` |
+| S0 | `phase2/r1-foundation` | ✅ code + tests · PO validation pending | `v1.0.1-p2` |
+| S1 | `phase2/r1-foundation` | ✅ code + tests · PO validation pending | `v1.1.0-p2` |
+| S2 | `phase2/r1-foundation` | ✅ code + tests · PO validation pending | `v1.2.0-p2` |
+| S3 | `phase2/r1-foundation` | ✅ code + tests · PO validation pending | `v1.3.0-p2` |
 | S4 | `phase2/S04-work-world` | ⬜ | `v1.4.0-p2` |
 | S5 | `phase2/S05-home-world` | ⬜ | `v1.5.0-p2` |
 | S6 | `phase2/S06-collab-briefing` | ⬜ | `v1.6.0-p2` |
@@ -88,6 +88,8 @@ Holiday buffer: the illustrative calendar skips Dec 21 – Jan 1.
 | S12 | `phase2/S12-recipes-beta` | ⬜ | `v2.0.0-beta` |
 
 **Legend:** ⬜ not started · 🟡 in progress · ✅ done
+
+> **Implementation notes (R1, 2026-09-19):** S0–S3 landed together on `phase2/r1-foundation` in one commit per sprint. Deviations from the plan: migrations are numbered 004 (chat history), 005 (activity ledger), 006 (permissions), 007 (memory) instead of 004–006; the Mother's LLM half (`mother_agent`) ships with internal tools while delegation is planned in code until the S6 bus; leaf agents receive scoped `read_memory` / `propose_memory` through the shared `filtered_for_agent` wrapper rather than per-builder edits; a first-boot compatibility fix tracks adk-rust `main` (rmcp 3, `AwpState::builder`).
 
 ---
 

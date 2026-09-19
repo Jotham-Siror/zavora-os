@@ -35,10 +35,29 @@ Concept: [`PERSONAL_AI_OS.md`](./PERSONAL_AI_OS.md) · Plan: [`SPRINT_PLAN.md`](
 
 | Sprint | Branch | Status | Tag |
 |--------|--------|--------|-----|
-| S0 Align & scaffold | `phase2/r1-foundation` | 🟡 in progress | `v1.0.1-p2` |
-| S1 Mother Agent v1 | `phase2/r1-foundation` | ⬜ | `v1.1.0-p2` |
-| S2 Ledger + permission modes | `phase2/r1-foundation` | ⬜ | `v1.2.0-p2` |
-| S3 Personal memory v1 | `phase2/r1-foundation` | ⬜ | `v1.3.0-p2` |
+| S0 Align & scaffold | `phase2/r1-foundation` | ✅ code + tests (validation script below awaits product-owner sign-off) | `v1.0.1-p2` |
+| S1 Mother Agent v1 | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.1.0-p2` |
+| S2 Ledger + permission modes | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.2.0-p2` |
+| S3 Personal memory v1 | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.3.0-p2` |
+
+### R1 validation script (product owner)
+
+Offline (no API key, no Postgres) — everything streams its mock, the Mother still orchestrates:
+
+- [ ] `cargo test --lib` and `cargo test --test validate -- mother_ domain_ gate_ permission_ pending_ ledger_ memory_ effects_` are green
+- [ ] `cargo run` → `GET /health` reports `"phase": "P2-S3"`; `GET /awp/manifest` lists `chat_mother`, `list_actions`, `approve_action`, `get_permissions`, `set_permissions`, `pause_agents`, `record_ui_events`, `manage_memory`
+- [ ] `POST /api/sessions/{sid}/chat {"text":"What's happening with work?"}` → one `scenario` event with `total_cards: 6`, cards re-indexed 0–5, one `suzy_summary` with `key: "mother"`, `done`
+- [ ] `{"text":"Build me a pitch deck"}` → unchanged deck stream; `{"text":"hmm"}` → one clarifying question
+- [ ] `{"text":"Remember I live in Nairobi"}` → "I'll remember" reply; `GET /api/greeting?session_id={sid}` uses Nairobi for weather when the weather MCP is connected
+- [ ] `GET /api/memory?session_id={sid}` without a JWT → AWP error envelope (403); with dev sign-in → the item with `kind: "known"` and `provenance[0].kind: "user_statement"`
+
+Live (API key + `mcp-email` connected):
+
+- [ ] `PUT /api/permissions {"agent_id":"inbox_agent","mode":"suggest"}` → "Start my day" → "Draft replies" creates drafts (write_local runs), nothing is sent
+- [ ] Any `send_*` tool call → `permission_request` event on the stream and a row in `GET /api/actions`; `POST /api/actions/{id}/approve` executes it and `GET /api/audit` shows `decision: "approved"`
+- [ ] `PUT /api/permissions {"agent_id":"inbox_agent","mode":"observe"}` → the same flow yields facts only and `GET /api/audit` shows `denied`
+- [ ] `POST /api/pause {"scope":"all"}` → every write returns `status: "paused"`; `POST /api/resume` restores
+- [ ] `SELECT meta, subject_hash FROM activity_events LIMIT 20` contains no bodies, subjects or names
 
 **Legend:** ⬜ not started · 🟡 in progress · ✅ done
 

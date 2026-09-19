@@ -63,6 +63,25 @@ pub async fn handle_intent(req: MotherRequest<'_>) -> Response {
         state.sessions.append_chat(&session_id, "user", &text).await;
     }
 
+    // Memory statements never get delegated: "remember …", "forget …", "why do you think …".
+    if let Some(reply) = crate::memory::chat::try_handle(&state.memory, &user_id, &session_id, &text).await {
+        let html = reply.html();
+        state.ledger.record(
+            crate::intelligence::ledger::ActivityEvent::new(&user_id, Domain::Shared, "mother", "memory_statement")
+                .meta(serde_json::json!({ "entry": entry.as_str(), "kind": match reply {
+                    crate::memory::chat::MemoryReply::Remembered { .. } => "remember",
+                    crate::memory::chat::MemoryReply::Forgot(_) => "forget",
+                    crate::memory::chat::MemoryReply::Explained(_) => "explain",
+                    crate::memory::chat::MemoryReply::Listed(_) => "list",
+                    crate::memory::chat::MemoryReply::Nothing(_) => "nothing",
+                } })),
+        );
+        if matches!(entry, Entry::Chat) {
+            state.sessions.append_chat(&session_id, "mother", &synth::strip_tags(&html)).await;
+        }
+        return stream_message(html);
+    }
+
     let intake = intake::classify(
         state.router_runner.as_deref(),
         &user_id,
@@ -76,6 +95,22 @@ pub async fn handle_intent(req: MotherRequest<'_>) -> Response {
         targets = intake.targets.len(),
         domains = ?intake.domains,
         "mother intake"
+    );
+
+    state.ledger.record(
+        crate::intelligence::ledger::ActivityEvent::new(
+            &user_id,
+            if intake.domains.len() == 1 { intake.domains[0] } else { Domain::Shared },
+            "mother",
+            "intent",
+        )
+        .meta(serde_json::json!({
+            "entry": entry.as_str(),
+            "source": intake.source,
+            "targets": intake.targets.len(),
+            "kind": match intake.kind { intake::Kind::Question => "question", intake::Kind::Action => "action" },
+            "scenario": intake.primary_scenario().unwrap_or("clarify"),
+        })),
     );
 
     if let Some(msg) = intake.clarify.clone() {
@@ -96,6 +131,18 @@ pub async fn handle_intent(req: MotherRequest<'_>) -> Response {
     stream_multi_target(state, session_id, user_id, text, intake)
 }
 
+/// A one-shot Mother reply (no cards): `suzy_summary` + `done`.
+pub fn stream_message(html: String) -> Response {
+    let (tx, rx) = mpsc::channel::<Result<axum::response::sse::Event, Infallible>>(4);
+    tokio::spawn(async move {
+        let _ = tx
+            .send(Ok(to_event(&FieldEvent::SuzySummary { key: "mother".into(), html, audio_clip: None })))
+            .await;
+        let _ = tx.send(Ok(to_event(&FieldEvent::Done))).await;
+    });
+    Sse::new(ReceiverStream::new(rx)).into_response()
+}
+
 /// Fan out to every target concurrently, merge, persist, synthesize, stream.
 fn stream_multi_target(
     state: &AppState,
@@ -108,6 +155,7 @@ fn stream_multi_target(
     let state = state.clone();
 
     tokio::spawn(async move {
+        let started = chrono::Utc::now();
         let targets = intake.targets.clone();
         let primary = intake.primary_scenario().unwrap_or("morning").to_string();
 
@@ -159,13 +207,18 @@ fn stream_multi_target(
         }
 
         let mode_for = |agent: &str| crate::tools::allowlist::catalog().mode_for(&agent_id_from_card_agent(agent));
+        // Memory the synthesis may cite — kinds are cited as "(you told me)" / "(I think)" (S3-T7).
+        let memory_notes = state
+            .memory
+            .notes_for(&user_id, crate::memory::Scope::MOTHER, 3)
+            .await;
         let synthesis = synth::compose(
             state.suzy_runner.as_ref().filter(|_| state.coordinator_enabled),
             &user_id,
             &session_id,
             &text,
             &merged.results,
-            &[],
+            &memory_notes,
             &mode_for,
         )
         .await;
@@ -182,6 +235,15 @@ fn stream_multi_target(
                 audio_clip: None,
             })))
             .await;
+        for a in state
+            .pending
+            .list(&user_id, Some(crate::permissions::PendingStatus::Pending), Some(&session_id))
+            .await
+            .into_iter()
+            .filter(|a| a.created_at >= started)
+        {
+            let _ = tx.send(Ok(to_event(&crate::routes::actions::permission_request_event(&a)))).await;
+        }
         for a in synthesis.actions.iter().take(4) {
             let _ = tx
                 .send(Ok(to_event(&FieldEvent::Suggest {
@@ -259,7 +321,7 @@ pub fn merge_target_events(targets: &[Target], per_target: Vec<(Vec<serde_json::
     let mut merged = Merged::default();
     let mut offset = 0usize;
 
-    for (target, (events, timed_out)) in targets.iter().zip(per_target.into_iter()) {
+    for (target, (events, timed_out)) in targets.iter().zip(per_target) {
         let declared = events
             .iter()
             .find(|e| e.get("type").and_then(|t| t.as_str()) == Some("scenario"))

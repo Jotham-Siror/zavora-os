@@ -24,8 +24,8 @@ pub async fn build(
 
 Rules:
 - Read sibling outputs from shared state (calendar + inbox summaries) if present.
-- gnews_top_headlines or search_news for 2–3 headlines (country us unless user specifies).
-- get_forecast for user's location (default San Francisco if unknown; geocode_location first if needed).
+- gnews_top_headlines or search_news for 2–3 headlines for the user's country (from [Profile] when present; otherwise the site default).
+- get_forecast for the [Profile] home_location (geocode_location first). If it is unknown, read_memory for profile.home_location; if still unknown, skip the weather line rather than guessing a city.
 - Output 3 brief lines: top headline, weather/commute note, one actionable insight from calendar/inbox context.
 - Minimize narration — use tools first."#,
         )

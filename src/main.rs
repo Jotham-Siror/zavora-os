@@ -71,7 +71,30 @@ async fn main() -> anyhow::Result<()> {
         });
     let brand_tone = biz.brand_voice.as_ref().and_then(|b| b.tone.clone());
 
-    let (session_service, session_store, auth_state) = boot_persistence(&config).await?;
+    let (session_service, session_store, auth_state, pg_pool) = boot_persistence(&config).await?;
+
+    // Permission gate services (S2): ledger, modes, pending actions, audit. Installed before any
+    // agent is built so every gated tool shares the same stores as the HTTP routes.
+    let ledger_key = std::env::var("LEDGER_HASH_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+        .unwrap_or_else(|| "zavora-ledger-dev-key".into())
+        .into_bytes();
+    let services = match pg_pool.clone() {
+        Some(pool) => spatial_os::permissions::PermissionServices::with_postgres(pool, ledger_key),
+        None => spatial_os::permissions::PermissionServices::in_memory(),
+    };
+    if spatial_os::permissions::gate::init(services).is_err() {
+        tracing::warn!("permission services were already initialized — keeping the existing instance");
+    }
+    // Personal memory (S3): known · assumed · recommended, sensitive values encrypted at rest.
+    let memory = spatial_os::memory::MemoryService::new(
+        pg_pool.clone(),
+        spatial_os::memory::crypto::Crypto::from_env_or_dev(),
+    );
+    if spatial_os::memory::init(memory).is_err() {
+        tracing::warn!("memory service was already initialized — keeping the existing instance");
+    }
 
     let mut deck_runner = None;
     let mut combine_runner = None;
@@ -237,7 +260,7 @@ async fn main() -> anyhow::Result<()> {
 
     let runtime = spatial_os::state::RuntimeStatus {
         milestone: "M11",
-        phase: "P2-S1",
+        phase: "P2-S3",
         agents_enabled: config.agents_enabled(),
         postgres_enabled: config.postgres_enabled(),
         auth_enabled: config.auth_enabled(),
@@ -361,6 +384,31 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/sessions/{session_id}/chat",
             post(routes::chat::chat).get(routes::chat::history),
+        )
+        .route(
+            "/api/sessions/{session_id}/events",
+            post(routes::events::record),
+        )
+        .route("/api/actions", get(routes::actions::list))
+        .route("/api/actions/approve", post(routes::actions::approve_batch))
+        .route("/api/actions/{id}/approve", post(routes::actions::approve))
+        .route("/api/actions/{id}/reject", post(routes::actions::reject))
+        .route("/api/actions/{id}/edit", post(routes::actions::edit))
+        .route("/api/audit", get(routes::actions::audit))
+        .route(
+            "/api/permissions",
+            get(routes::permissions::get).put(routes::permissions::put),
+        )
+        .route("/api/pause", post(routes::permissions::pause))
+        .route("/api/resume", post(routes::permissions::resume))
+        .route(
+            "/api/memory",
+            get(routes::memory::list).post(routes::memory::remember).delete(routes::memory::purge),
+        )
+        .route("/api/memory/export", get(routes::memory::export))
+        .route(
+            "/api/memory/{id}",
+            axum::routing::patch(routes::memory::patch).delete(routes::memory::forget),
         )
         .route(
             "/api/sessions/{session_id}/fuse",
@@ -792,12 +840,14 @@ async fn boot_persistence(
     SharedSessionService,
     SessionStore,
     Option<Arc<AuthState>>,
+    Option<sqlx::PgPool>,
 )> {
     let Some(database_url) = config.database_url.as_deref() else {
         tracing::info!("DATABASE_URL unset — in-memory sessions (M4 behaviour)");
         return Ok((
             Arc::new(InMemorySessionService::new()),
             SessionStore::new(),
+            None,
             None,
         ));
     };
@@ -812,7 +862,7 @@ async fn boot_persistence(
 
     let auth_state = config.jwt_secret.as_ref().map(|jwt_secret| {
         Arc::new(AuthState {
-            db: pool,
+            db: pool.clone(),
             jwt_secret: jwt_secret.clone(),
             google_client_id: config.google_oauth_client_id.clone(),
             google_client_secret: config.google_oauth_client_secret.clone(),
@@ -824,7 +874,7 @@ async fn boot_persistence(
         tracing::info!("Google OAuth + JWT auth enabled");
     }
 
-    Ok((session_service, session_store, auth_state))
+    Ok((session_service, session_store, auth_state, Some(pool)))
 }
 
 fn awp_router(state: AwpState) -> Router {

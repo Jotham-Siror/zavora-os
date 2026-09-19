@@ -24,8 +24,9 @@ pub async fn compose(
     pool: Option<&MorningMcpPool>,
     brand_body: &str,
     brand_tone: Option<&str>,
+    home_location: Option<&str>,
 ) -> GreetingPayload {
-    let snapshot = gather(pool).await;
+    let snapshot = gather(pool, home_location).await;
 
     if snapshot.has_integration_facts() {
         if let Some(runner) = runner {

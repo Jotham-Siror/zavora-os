@@ -19,7 +19,7 @@ Open [http://localhost:9847](http://localhost:9847). Use `?demo=1` for offline s
 | `src/` | Axum server, SSE orchestration, AWP routes |
 | `audio/` | Prerecorded voice clips |
 | `scripts/` | Demo capture (`capture.js`) and TTS generation (`gen_audio.py`) |
-| `docs/` | Specification and implementation plan |
+| `docs/` | Specification, implementation plan, Phase 2 concept + sprint plan, ADRs |
 | `demo/` | Generated demo assets (gitignored) |
 | `deploy/` | Deployment configs (M11) |
 
@@ -30,6 +30,14 @@ Open [http://localhost:9847](http://localhost:9847). Use `?demo=1` for offline s
 - `GET /artifacts/{session_id}/{file}` — deck artifacts (.xlsx, .docx, .pptx)
 - `GET /health`
 - `GET /.well-known/awp.json`, `GET /awp/manifest` — AWP discovery
+
+Phase 2 · R1 (Personal AI OS foundation — see `docs/SPRINT_PLAN.md`):
+
+- `POST /api/sessions/{id}/chat` → SSE via the Mother Agent (multi-world fan-out, one synthesis); `GET` returns the transcript
+- `GET /api/actions` · `POST /api/actions/{id}/approve|reject|edit` · `POST /api/actions/approve` (batch) · `GET /api/audit`
+- `GET/PUT /api/permissions` (observe | suggest | automate per agent, per-tool overrides) · `POST /api/pause` · `POST /api/resume`
+- `GET/POST/DELETE /api/memory` · `PATCH/DELETE /api/memory/{id}` · `GET /api/memory/export` (known · assumed · recommended, with provenance)
+- `POST /api/sessions/{id}/events` — content-free UI signals for the activity ledger
 
 ## Real deck workflow (M1)
 

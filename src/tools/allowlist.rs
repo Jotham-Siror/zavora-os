@@ -238,9 +238,8 @@ pub fn init(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Whether boot fails on an allowlisted tool without an effect class. S0: warn only.
-/// S2 (S2-T4) flips this to `true` once every server's tools are classified.
-pub const EFFECTS_REQUIRED: bool = false;
+/// Boot fails on an allowlisted tool without an effect class (S2-T4, ADR-003).
+pub const EFFECTS_REQUIRED: bool = true;
 
 /// Agent contract for `agent` from the global catalog.
 pub fn spec_for(agent: &str) -> Option<AgentSpec> {

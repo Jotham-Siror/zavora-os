@@ -59,6 +59,8 @@ pub fn stream_workflow(
     let integrations = config.integrations_note;
 
     tokio::spawn(async move {
+        let started = chrono::Utc::now();
+        let services = crate::permissions::gate::services();
         if let Some(ref store) = sessions {
             store
                 .set_scenario(&session_id, scenario_key, Some(&intent))
@@ -177,6 +179,18 @@ pub fn stream_workflow(
 
             if event.is_final_response() && !resolved[index] {
                 let resolve = (config.resolve)(&author, &tool_buf[index], &agent_buf[index]);
+                services.ledger.record(
+                    crate::intelligence::ledger::ActivityEvent::new(
+                        &user_id,
+                        cards
+                            .get(index)
+                            .map(|c| crate::domain::Domain::for_card(scenario_key, c))
+                            .unwrap_or_else(|| crate::domain::Domain::for_scenario(scenario_key)),
+                        &author,
+                        "card_resolve",
+                    )
+                    .meta(serde_json::json!({ "scenario": scenario_key, "index": index })),
+                );
                 if let Some(ref store) = sessions {
                     let card = cards.get(index).cloned().unwrap_or_default();
                     persist::card_resolve(store, &session_id, index, card, resolve.clone(), false)
@@ -213,6 +227,17 @@ pub fn stream_workflow(
                     resolve,
                 })))
                 .await;
+        }
+
+        // Anything an agent queued for approval during this run is announced on the same stream.
+        for a in services
+            .pending
+            .list(&user_id, Some(crate::permissions::PendingStatus::Pending), Some(&session_id))
+            .await
+            .into_iter()
+            .filter(|a| a.created_at >= started)
+        {
+            let _ = tx.send(Ok(to_event(&crate::routes::actions::permission_request_event(&a)))).await;
         }
 
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
