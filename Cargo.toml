@@ -2,6 +2,8 @@
 name = "spatial-os"
 version = "0.1.0"
 edition = "2024"
+# `cargo run` must keep starting the server now that src/bin/load_ledger.rs exists (R1).
+default-run = "spatial-os"
 
 [lib]
 name = "spatial_os"

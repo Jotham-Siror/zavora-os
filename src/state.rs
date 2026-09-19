@@ -426,6 +426,10 @@ pub struct AppState {
     pub audit: crate::permissions::AuditLog,
     /// Personal memory — known · assumed · recommended (S3).
     pub memory: crate::memory::MemoryService,
+    /// Consents per category and world (S11-T4, pulled forward to team sprint A).
+    pub consents: crate::memory::consent::ConsentStore,
+    /// Tasks shared by Work Productivity and Home Personal Productivity (S4-T3).
+    pub tasks: crate::tools::tasks::TaskStore,
     pub session_service: SharedSessionService,
     pub auth: Option<Arc<crate::auth::AuthState>>,
     pub awp: Arc<crate::awp_gate::AwpGate>,
@@ -499,6 +503,8 @@ impl AppState {
             pending: crate::permissions::gate::services().pending.clone(),
             audit: crate::permissions::gate::services().audit.clone(),
             memory: crate::memory::service_handle().clone(),
+            consents: crate::memory::consent::handle().clone(),
+            tasks: crate::tools::tasks::store_handle().clone(),
             session_service,
             auth,
             awp,

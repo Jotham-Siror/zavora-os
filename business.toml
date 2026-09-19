@@ -232,6 +232,20 @@ endpoint = "/api/auth/me"
 method = "GET"
 access_level = "known"
 
+[[capabilities]]
+name = "list_tasks"
+description = "Tasks store shared by Work Productivity and Home Personal Productivity — open tasks, deadlines, focus sessions and postponement counts across both worlds (S4-T3)"
+endpoint = "/api/tasks"
+method = "GET"
+access_level = "known"
+
+[[capabilities]]
+name = "manage_consents"
+description = "Consents per category (calendar, email, health, finance, social, location, reading, routines) and world; GET lists them, PUT grants or revokes one (S11-T4)"
+endpoint = "/api/consents"
+method = "GET"
+access_level = "known"
+
 [[policies]]
 name = "privacy"
 description = "Sessions persist to Postgres when DATABASE_URL is set; otherwise in-memory per process. The activity ledger is content-free (hashed subjects, counts and durations only); pending-action arguments are the only stored content and are held for at most 48 hours after resolution."
