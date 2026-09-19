@@ -54,7 +54,7 @@ The only hard cross-track dependency is that observations surface inside the bri
 
 | Team sprint | Dates | James | Kim | Robert | Jotham | Tag on completion |
 |---|---|---|---|---|---|---|
-| A | TBD | 🟡 | ⬜ | ⬜ | ⬜ | `v1.4.0-p2` |
+| A | TBD | 🟡 | ⬜ | ⬜ | 🟡 | `v1.4.0-p2` |
 | B | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.5.0-p2` |
 | C | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.6.0-p2` (R2) |
 | D | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.9.0-p2` (R3) |
