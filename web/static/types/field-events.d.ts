@@ -156,6 +156,32 @@ export interface PermissionsResponse {
   pause: unknown;
 }
 
+/** GET /api/audit — immutable record of executed, queued and denied effects (S2-T6). */
+export interface AuditEntry {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  agent_id: string;
+  domain: Domain;
+  tool: string;
+  effect: Effect;
+  /** allowed | queued | approved | rejected | denied | failed | paused */
+  decision: string;
+  approval_id: string | null;
+  recipe_id: string | null;
+  mode: Mode;
+  summary: string;
+  undo_token: string | null;
+  undone_at: string | null;
+  trace_id: string | null;
+  created_at: string;
+}
+
+export interface AuditResponse {
+  user_id: string;
+  entries: AuditEntry[];
+}
+
 /** POST /api/sessions/{sid}/events — content-free UI signals (S2-T2).
  *  Counts, domains and durations only; never content. */
 export interface UiEvent {
