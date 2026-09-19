@@ -7,7 +7,6 @@
 //! cards into one field, persists the merged cards, and closes with one Suzy synthesis.
 
 use std::convert::Infallible;
-use std::time::Duration;
 
 use axum::response::sse::Sse;
 use axum::response::{IntoResponse, Response};
@@ -18,7 +17,7 @@ use crate::domain::Domain;
 use crate::events::sse::{to_event, FieldEvent};
 use crate::mother::intake::{self, IntakeResult, Target};
 use crate::mother::synth::{self, CardOutcome, TargetResult};
-use crate::orchestrator::{dispatch, persist, sse_collect};
+use crate::orchestrator::{dispatch, persist};
 use crate::scenarios::tour;
 use crate::state::AppState;
 
@@ -50,10 +49,7 @@ pub struct MotherRequest<'a> {
     pub entry: Entry,
 }
 
-/// Per-target fan-out budget. Mock scenarios finish in a few seconds; live MCP workflows can
-/// take longer, so the budget is generous and a timed-out target still contributes its
-/// partial cards.
-pub const TARGET_TIMEOUT: Duration = Duration::from_secs(90);
+pub use crate::worlds::TARGET_TIMEOUT;
 
 /// The Mother Agent's runtime pipeline for one utterance.
 pub async fn handle_intent(req: MotherRequest<'_>) -> Response {
@@ -159,25 +155,13 @@ fn stream_multi_target(
         let targets = intake.targets.clone();
         let primary = intake.primary_scenario().unwrap_or("morning").to_string();
 
-        let mut collected: Vec<(Vec<serde_json::Value>, bool)> = Vec::with_capacity(targets.len());
-        let futures: Vec<_> = targets
-            .iter()
-            .map(|t| {
-                let state = state.clone();
-                let (sid, uid, txt, scenario) = (session_id.clone(), user_id.clone(), text.clone(), t.scenario.clone());
-                async move {
-                    let resp = dispatch::stream_scenario(&state, &scenario, sid, uid, txt, false).await;
-                    match tokio::time::timeout(TARGET_TIMEOUT, sse_collect::collect_sse_events(resp)).await {
-                        Ok(events) => (events, false),
-                        Err(_) => (Vec::new(), true),
-                    }
-                }
-            })
-            .collect();
-        for out in futures::future::join_all(futures).await {
-            collected.push(out);
+        // Worlds with a mother fold their targets into one structured result (S4-T1).
+        let fan = crate::worlds::fan_out(&state, &session_id, &user_id, &text, targets).await;
+        let targets = fan.targets;
+        if let Some(work) = &fan.work {
+            tracing::info!(agents = work.agents.len(), follow_ups = work.follow_ups.len(), stubs = work.stubs.len(), "work_mother result");
         }
-
+        let collected = fan.collected;
         let merged = merge_target_events(&targets, collected);
 
         // Persist the merged field under the primary scenario key.

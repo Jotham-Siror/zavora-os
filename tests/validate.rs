@@ -1116,17 +1116,18 @@ async fn mother_multi_target_merges_two_scenarios_offline() {
     let events = collect_sse_events(response).await;
     let types = ev_types(&events);
 
-    // One scenario header covering both delegated workflows (morning 3 cards + people 3 cards).
+    // One scenario header covering both delegated workflows (morning 3 + people 3) plus the
+    // Work Mother's two labeled stubs (S4) — re-indexed into one field.
     assert_eq!(types.iter().filter(|t| *t == "scenario").count(), 1, "{types:?}");
-    assert_eq!(events[0]["total_cards"], 6);
+    assert_eq!(events[0]["total_cards"], 8);
     let spawns: Vec<u64> = events
         .iter()
         .filter(|e| e["type"] == "card_spawn")
         .map(|e| e["index"].as_u64().unwrap())
         .collect();
-    assert_eq!(spawns, vec![0, 1, 2, 3, 4, 5], "cards must be re-indexed across targets");
+    assert_eq!(spawns, (0..8).collect::<Vec<u64>>(), "cards must be re-indexed across targets");
     assert!(events.iter().filter(|e| e["type"] == "card_spawn").all(|e| e["domain"].is_string()));
-    assert_eq!(types.iter().filter(|t| *t == "card_resolve").count(), 6);
+    assert_eq!(types.iter().filter(|t| *t == "card_resolve").count(), 8);
     // Exactly one synthesis from the Mother, then done.
     assert_eq!(types.iter().filter(|t| *t == "suzy_summary").count(), 1);
     let summary = events.iter().find(|e| e["type"] == "suzy_summary").unwrap();
@@ -1138,7 +1139,7 @@ async fn mother_multi_target_merges_two_scenarios_offline() {
 
     // Merged cards were persisted under the primary scenario with re-indexed positions.
     let cards = state.sessions.list_cards(&rec.session_id).await.expect("cards");
-    assert_eq!(cards.len(), 6);
+    assert_eq!(cards.len(), 8);
     assert!(cards.iter().all(|c| c.resolve.is_some()));
     let stored = state.sessions.get(&rec.session_id).await.unwrap();
     assert_eq!(stored.scenario.as_deref(), Some("morning"));
@@ -1260,7 +1261,7 @@ async fn mother_chat_route_streams_and_records_history() {
     assert_eq!(response.status(), StatusCode::OK);
     let events = collect_sse_events(response).await;
     assert_eq!(events[0]["type"], "scenario");
-    assert_eq!(events[0]["total_cards"], 6);
+    assert_eq!(events[0]["total_cards"], 8);
 
     let response = app
         .oneshot(Request::get(format!("/api/sessions/{}/chat", rec.session_id)).body(Body::empty()).unwrap())
@@ -2428,4 +2429,76 @@ async fn s7_store_roundtrip_daily_baselines_observation() {
     for table in ["observations", "baselines", "activity_daily"] {
         sqlx::query(&format!("DELETE FROM {table} WHERE user_id = $1")).bind(&user).execute(&pool).await.unwrap();
     }
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Phase 2 · S4 — Work World
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn work_mother_folds_fan_out_into_one_result_with_stubs_and_follow_ups() {
+    use chrono::{Duration, Utc};
+    use spatial_os::domain::Domain;
+    use spatial_os::intelligence::ledger::ActivityEvent;
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+    use spatial_os::permissions::Effect;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-work-mother".into()).await;
+    // A thread the inbox agent read four days ago and never answered (hashed subject only).
+    let mut ev = ActivityEvent::new(&rec.user_id, Domain::Work, "inbox_agent", "tool_call")
+        .effect(Effect::Read)
+        .subject(state.ledger.hash_key(), "thread-contract");
+    ev.ts = Utc::now() - Duration::days(4);
+    state.ledger.record(ev);
+
+    let response = dispatch_intent(IntentDispatch { state: &state, session_id: rec.session_id.clone(), user_id: rec.user_id.clone(), text: "What's happening with work?".into() }).await;
+    let events = collect_sse_events(response).await;
+    let spawns: Vec<&serde_json::Value> = events.iter().filter(|e| e["type"] == "card_spawn").collect();
+    // morning (3) + people (3) + follow-ups (1) + two labeled stubs = 9, all re-indexed and all work.
+    assert_eq!(spawns.len(), 9, "{:?}", spawns.iter().map(|s| &s["card"]["title"]).collect::<Vec<_>>());
+    assert_eq!(events[0]["total_cards"], 9);
+    assert!(spawns.iter().all(|s| s["domain"] == "work"));
+    let titles: Vec<&str> = spawns.iter().map(|s| s["card"]["title"].as_str().unwrap()).collect();
+    assert!(titles.contains(&"Follow-ups") && titles.contains(&"Career") && titles.contains(&"Professional presence"));
+    let resolves: Vec<&serde_json::Value> = events.iter().filter(|e| e["type"] == "card_resolve").collect();
+    assert_eq!(resolves.len(), 9);
+    assert!(resolves.iter().any(|r| r["resolve"]["big"] == "1 unanswered"), "3-day-old thread is flagged");
+    assert_eq!(resolves.iter().filter(|r| r["resolve"]["big"].as_str().map(|b| b.starts_with("STUB")).unwrap_or(false)).count(), 2, "stubs are labeled, never fake");
+    assert_eq!(events.iter().filter(|e| e["type"] == "suzy_summary").count(), 1);
+    let html = events.iter().find(|e| e["type"] == "suzy_summary").unwrap()["html"].as_str().unwrap();
+    assert!(html.contains("Follow-ups") && html.contains("unanswered"), "{html}");
+    assert!(!serde_json::to_string(&events).unwrap().contains("thread-contract"), "subjects never leave the ledger");
+}
+
+#[test]
+fn work_agents_carry_no_finance_or_health_tools() {
+    use spatial_os::domain::Domain;
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+    let catalog = AllowlistCatalog::from_file(&common::manifest_dir().join("mcp_allowlists.toml")).expect("catalog");
+    let forbidden_servers = ["banking", "market_data", "real_estate"];
+    let forbidden_tools = ["list_transactions", "search_transactions", "list_accounts", "yfinance_chart", "get_forecast"];
+    for id in spatial_os::worlds::work::phase1_agent_ids() {
+        let spec = catalog.spec_for(id).unwrap_or_else(|| panic!("work agent {id} missing from allowlist"));
+        assert_eq!(spec.world, Domain::Work, "{id} must be tagged work");
+        assert!(spec.mcp_servers.iter().all(|s| !forbidden_servers.contains(&s.as_str())), "{id} reaches a finance/home server");
+        assert!(spec.tool_names().iter().all(|t| !forbidden_tools.contains(&t.as_str())), "{id} has a finance/health tool");
+    }
+    // Stubs exist in the catalog with no tools and Observe mode.
+    for id in ["career_agent", "professional_social_agent"] {
+        let spec = catalog.spec_for(id).expect(id);
+        assert!(spec.tools.is_empty());
+        assert_eq!(spec.mode, spatial_os::permissions::Mode::Observe);
+    }
+    catalog.validate_effects(true).expect("effects complete");
+}
+
+#[tokio::test]
+async fn work_stub_agents_build_and_label_themselves() {
+    let career = spatial_os::agents::career::build().await.expect("career stub");
+    assert_eq!(career.name(), "career_agent");
+    let social = spatial_os::agents::professional_social::build().await.expect("social stub");
+    assert_eq!(social.name(), "professional_social_agent");
 }
