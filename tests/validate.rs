@@ -2502,3 +2502,60 @@ async fn work_stub_agents_build_and_label_themselves() {
     let social = spatial_os::agents::professional_social::build().await.expect("social stub");
     assert_eq!(social.name(), "professional_social_agent");
 }
+
+/// Regression: every runner is keyed by its own app name, but only the `zavora-os` session was
+/// ever created, so the router, Suzy, the Mother's synthesis and the workflow runners failed with
+/// `session.not_found` and silently fell back. `ensure_runner_session` creates the session on
+/// first use and is idempotent.
+#[tokio::test]
+async fn mother_runner_session_is_created_on_first_use() {
+    use adk_agent::CustomAgentBuilder;
+    use adk_core::{Content, Event, SessionId, UserId};
+    use adk_runner::Runner;
+    use adk_session::{GetRequest, InMemorySessionService};
+
+    let echo: Arc<dyn adk_core::Agent> = Arc::new(
+        CustomAgentBuilder::new("echo")
+            .description("replies with a fixed word")
+            .handler(|_ctx| async move {
+                let mut event = Event::new("echo");
+                event.author = "echo".into();
+                event.llm_response.content = Some(Content::new("assistant").with_text("PONG"));
+                Ok(Box::pin(futures::stream::iter(vec![Ok(event)])) as adk_core::EventStream)
+            })
+            .build()
+            .expect("stub agent"),
+    );
+    let sessions: Arc<dyn adk_session::SessionService> = Arc::new(InMemorySessionService::new());
+    let runner = Runner::builder().app_name("zavora-os-test-app").agent(echo).session_service(sessions.clone()).build().expect("runner");
+
+    // Without the helper the run fails exactly the way the live server did: `Runner::run`
+    // returns a stream whose first item is the `session.not_found` error.
+    let mut missing = runner
+        .run(UserId::try_from("u-runner").unwrap(), SessionId::try_from("s-runner").unwrap(), Content::new("user").with_text("hi"))
+        .await
+        .expect("run returns a stream");
+    let first = missing.next().await.expect("one item");
+    let err = first.err().expect("a runner must not find a session nobody created").to_string();
+    assert!(err.contains("not_found") || err.contains("not found"), "unexpected error: {err}");
+    drop(missing);
+
+    spatial_os::agents::ensure_runner_session(&runner, "u-runner", "s-runner").await;
+    spatial_os::agents::ensure_runner_session(&runner, "u-runner", "s-runner").await; // idempotent
+    assert!(sessions
+        .get(GetRequest { app_name: "zavora-os-test-app".into(), user_id: "u-runner".into(), session_id: "s-runner".into(), num_recent_events: None, after: None })
+        .await
+        .is_ok());
+
+    let mut stream = runner
+        .run(UserId::try_from("u-runner").unwrap(), SessionId::try_from("s-runner").unwrap(), Content::new("user").with_text("hi"))
+        .await
+        .expect("run succeeds once the session exists");
+    let mut text = String::new();
+    while let Some(ev) = stream.next().await {
+        if let Some(c) = ev.expect("event").llm_response.content {
+            text.extend(c.parts.iter().filter_map(|p| p.text().map(str::to_string)));
+        }
+    }
+    assert!(text.contains("PONG"), "got {text:?}");
+}
