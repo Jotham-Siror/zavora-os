@@ -231,6 +231,12 @@
     }
 
     function handleEvent(ev, intentText) {
+      // Phase 2 surfaces (chat panel, approvals inbox) observe the same stream.
+      try {
+        window.dispatchEvent(new CustomEvent('zavora:field-event', { detail: ev }));
+      } catch (_) {
+        /* never let listeners break orchestration */
+      }
       switch (ev.type) {
         case 'scenario':
           beginScenario(ev.key, ev.text || intentText, ev.total_cards || 0);
@@ -371,6 +377,31 @@
       await consumeSse(res, trimmed);
     }
 
+    // S10-T3: a conversational turn with the Mother Agent. Same SSE pipeline as an
+    // intent (cards bloom in the field), plus the turn lands in the session chat history.
+    async function submitChat(text) {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      await ensureSession();
+      if (abortController) abortController.abort();
+      abortController = new AbortController();
+      const res = await fetch(`/api/sessions/${sessionId}/chat`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify({ text: trimmed }),
+        signal: abortController.signal,
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`chat failed: ${res.status}${detail ? ` — ${detail}` : ''}`);
+      }
+      await consumeSse(res, trimmed);
+    }
+
     window.__ZAVORA_LIVE__ = {
       submit(text) {
         submitLive(text).catch((err) => {
@@ -380,6 +411,13 @@
           if (ui.showSuzyCustom) ui.showSuzyCustom(msg);
           else alert(msg);
         });
+      },
+      chat(text) {
+        return submitChat(text);
+      },
+      ensureSession,
+      getSessionId() {
+        return sessionId;
       },
     };
 

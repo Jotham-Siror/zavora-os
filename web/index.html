@@ -553,6 +553,50 @@
   .tile.dom-home .av { background: linear-gradient(135deg, rgba(61,220,151,.38), rgba(61,220,151,.18)); }
   .mode-badge { margin-left: 5px; font-size: 10px; opacity: .75; cursor: default; }
 
+  /* ---------- Phase 2 surface: launchers + panels (Mother chat S10-T3, approvals S10-T4) ---------- */
+  .p2-launch { position: fixed; right: 18px; z-index: 55; width: 46px; height: 46px;
+    border-radius: 50%; border: 1px solid var(--stroke); background: var(--glass); color: var(--ink);
+    font-size: 18px; cursor: pointer; backdrop-filter: blur(18px); display: grid; place-items: center;
+    transition: all .25s var(--spring); }
+  .p2-launch:hover { background: rgba(255,255,255,.1); transform: scale(1.06); }
+  .p2-launch.chat { bottom: 18px; background: linear-gradient(135deg, rgba(255,126,182,.3), rgba(124,92,255,.3)); }
+  .p2-launch.appr { bottom: 74px; }
+  .p2-count { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px;
+    border-radius: 999px; background: linear-gradient(120deg, #ffb35a, #ff7eb6); color: #1a0e06;
+    font-size: 10px; font-weight: 800; display: grid; place-items: center; }
+  .p2-panel { position: fixed; right: 18px; bottom: 132px; z-index: 56; width: 340px; max-width: calc(100vw - 36px);
+    display: flex; flex-direction: column; max-height: min(520px, 62vh); border-radius: 18px;
+    background: var(--glass); border: 1px solid var(--stroke); backdrop-filter: blur(24px);
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,.85); overflow: hidden; }
+  .p2-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-size: 13px; font-weight: 700;
+    border-bottom: 1px solid var(--stroke); }
+  .p2-head span { flex: 1; }
+  .p2-x { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+  .p2-x:hover { color: var(--ink); }
+  .p2-mini { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--stroke); background: rgba(255,255,255,.05);
+    color: var(--ink); font-size: 11px; font-weight: 600; cursor: pointer; }
+  .p2-mini:hover { background: rgba(255,255,255,.12); }
+  .p2-list { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .p2-empty { font-size: 12px; color: rgba(154,164,196,.55); text-align: center; padding: 14px 6px; }
+  .chat-turn { max-width: 86%; padding: 9px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+  .chat-turn.user { align-self: flex-end; background: linear-gradient(120deg, rgba(124,92,255,.35), rgba(91,124,255,.3));
+    border: 1px solid rgba(124,92,255,.35); }
+  .chat-turn.mother { align-self: flex-start; background: rgba(255,255,255,.05); border: 1px solid var(--stroke); color: #e7ebff; }
+  .chat-turn.mother b { color: #fff; }
+  .chat-turn.pending { color: var(--muted); font-style: italic; }
+  .p2-inrow { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
+  .p2-inrow input { flex: 1; min-width: 0; background: rgba(255,255,255,.05); border: 1px solid var(--stroke);
+    border-radius: 12px; color: var(--ink); font-size: 16px; padding: 9px 12px; outline: none; }
+  .p2-inrow input:focus { border-color: rgba(124,92,255,.55); }
+  .p2-send { width: 38px; height: 38px; flex: none; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(120deg, var(--accent-a), #5b7cff); color: #fff; font-size: 16px; }
+  @media (max-width: 640px) {
+    .p2-launch { right: 12px; width: 42px; height: 42px; }
+    .p2-launch.chat { bottom: 158px; }
+    .p2-launch.appr { bottom: 208px; }
+    .p2-panel { right: 12px; left: 12px; width: auto; bottom: 208px; max-height: 48vh; }
+  }
+
   /* tiny phones */
   @media (max-width: 380px) {
     .detail .trays { grid-template-columns: 1fr; }
@@ -659,6 +703,17 @@
   <div class="origin" id="origin"><span class="dot"></span><span>From your intent &nbsp;·&nbsp; <b id="originText"></b></span></div>
 
   <div class="suzy" id="suzy"><div class="face" id="suzyFace">✦</div><div class="text" id="suzyText"></div></div>
+
+  <!-- Phase 2 surface (live mode only) — behaviour in /static/mother-chat.js -->
+  <button class="p2-launch chat" id="chatOpen" hidden title="Chat with Suzy" aria-label="Chat with Suzy">✦</button>
+  <div class="p2-panel" id="chatPanel" hidden>
+    <div class="p2-head"><span>✦ Suzy — Mother Agent</span><button class="p2-x" id="chatClose" aria-label="Close chat">×</button></div>
+    <div class="p2-list" id="chatList"></div>
+    <form class="p2-inrow" id="chatForm">
+      <input id="chatText" placeholder="Ask or tell Suzy anything…" autocomplete="off" aria-label="Chat message" />
+      <button class="p2-send" type="submit" aria-label="Send">↑</button>
+    </form>
+  </div>
 
   <div class="stage">
     <div class="field"><div class="cards" id="cards"></div></div>
@@ -2371,5 +2426,6 @@ submitIntent = function (text) {
 </script>
 <script src="/static/live-voice.js"></script>
 <script src="/static/field-client.js"></script>
+<script src="/static/mother-chat.js"></script>
 </body>
 </html>
