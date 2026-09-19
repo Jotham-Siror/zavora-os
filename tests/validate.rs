@@ -2502,3 +2502,146 @@ async fn work_stub_agents_build_and_label_themselves() {
     let social = spatial_os::agents::professional_social::build().await.expect("social stub");
     assert_eq!(social.name(), "professional_social_agent");
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 · S5 — Home World
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn home_mother_folds_family_and_personal_cards_from_memory() {
+    use chrono::{Duration, Local};
+    use spatial_os::domain::Domain;
+    use spatial_os::intelligence::ledger::ActivityEvent;
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-home-mother".into()).await;
+    let run = |text: String| {
+        let state = state.clone();
+        let (sid, uid) = (rec.session_id.clone(), rec.user_id.clone());
+        async move { collect_sse_events(dispatch_intent(IntentDispatch { state: &state, session_id: sid, user_id: uid, text }).await).await }
+    };
+
+    // The user states a date and a personal task in chat; the task was postponed twice (ledger).
+    let soon = (Local::now().date_naive() + Duration::days(10)).format("%-d %b").to_string();
+    run(format!("Remember Sara's birthday is {soon}")).await;
+    run("remember to renew my passport".to_string()).await;
+    for _ in 0..2 {
+        state.ledger.record(
+            ActivityEvent::new(&rec.user_id, Domain::Home, "personal_productivity", "task_postponed")
+                .subject(state.ledger.hash_key(), "task.renew_my_passport"),
+        );
+    }
+    let items = state.memory.export(&rec.user_id).await;
+    assert!(items.iter().any(|i| i.key == "date.birthday.sara" && i.domain == Domain::Home), "{:?}", items.iter().map(|i| &i.key).collect::<Vec<_>>());
+    assert!(items.iter().any(|i| i.key == "task.renew_my_passport" && i.domain == Domain::Home));
+
+    let events = run("Remind me about family commitments.".to_string()).await;
+    assert_eq!(events[0]["type"], "scenario");
+    assert_eq!(events[0]["total_cards"], 3, "Family + Personal + labeled Personal social stub");
+    let spawns: Vec<&serde_json::Value> = events.iter().filter(|e| e["type"] == "card_spawn").collect();
+    assert!(spawns.iter().all(|s| s["domain"] == "home"));
+    let titles: Vec<&str> = spawns.iter().map(|s| s["card"]["title"].as_str().unwrap()).collect();
+    assert_eq!(titles, vec!["Family", "Personal", "Personal social"]);
+    let resolves: Vec<&serde_json::Value> = events.iter().filter(|e| e["type"] == "card_resolve").collect();
+    assert_eq!(resolves[0]["resolve"]["big"], "1 date ahead");
+    assert!(resolves[0]["resolve"]["sub"].as_str().unwrap().contains("birthday · Sara in 10 days"), "{}", resolves[0]["resolve"]["sub"]);
+    assert_eq!(resolves[1]["resolve"]["big"], "1 personal task");
+    assert!(resolves[1]["resolve"]["sub"].as_str().unwrap().contains("renew my passport (postponed 2×)"));
+    assert!(resolves[2]["resolve"]["big"].as_str().unwrap().starts_with("STUB"));
+    let summary = events.iter().find(|e| e["type"] == "suzy_summary").unwrap()["html"].as_str().unwrap();
+    assert!(summary.contains("Home:") && summary.contains("Sara"), "{summary}");
+    assert_eq!(events.iter().filter(|e| e["type"] == "suzy_summary").count(), 1);
+}
+
+#[tokio::test]
+async fn home_personal_productivity_reads_the_shared_tasks_store() {
+    use spatial_os::agents::personal_productivity::{self, SOURCE_STORE};
+    use spatial_os::domain::Domain;
+    use spatial_os::intelligence::ledger::LedgerService;
+    use spatial_os::memory::MemoryService;
+    use spatial_os::tools::tasks::{store_handle, NewTask, Priority, TaskKind, TOOL_NAMES};
+
+    let user = "u-personal-store";
+    let agent = "personal_productivity_agent";
+    let store = store_handle();
+    let new = |domain: Domain, title: &'static str, kind: TaskKind| NewTask {
+        domain,
+        title,
+        kind,
+        due: None,
+        duration_minutes: None,
+        priority: Priority::Normal,
+        source_agent: agent,
+        notes: None,
+    };
+    let passport = store.create(user, new(Domain::Home, "Renew passport", TaskKind::Errand)).await;
+    store.postpone(user, passport.id, None, agent).await.expect("postponed once");
+    store.postpone(user, passport.id, None, agent).await.expect("postponed twice");
+    store.create(user, new(Domain::Shared, "Book the dentist", TaskKind::Task)).await;
+    store.create(user, new(Domain::Work, "Ship the deck", TaskKind::Deadline)).await;
+    let done = store.create(user, new(Domain::Home, "Water the plants", TaskKind::Household)).await;
+    store.complete(user, done.id, agent).await.expect("completed");
+
+    let facts = personal_productivity::facts(&MemoryService::in_memory(), &LedgerService::in_memory(), user).await;
+    let titles: Vec<&str> = facts.tasks.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(titles, vec!["Renew passport", "Book the dentist"], "home + shared, open only, most postponed first");
+    assert_eq!(facts.tasks[0].postponed, 2);
+    assert_eq!(facts.postponed_total, 2);
+    assert!(facts.tasks.iter().all(|t| t.source == SOURCE_STORE && t.known));
+
+    // The agent gets the five task tools behind the gate, scoped to home; no MCP tools leak in.
+    let inner: Arc<dyn adk_core::Toolset> = Arc::new(FakeInboxTools);
+    let ctx: Arc<dyn adk_core::ReadonlyContext> = Arc::new(adk_tool::SimpleToolContext::new("t"));
+    let toolset = spatial_os::agents::gemini::filtered_for_agent(agent, inner);
+    let names: Vec<String> = toolset.tools(ctx).await.unwrap().iter().map(|t| t.name().to_string()).collect();
+    for tool in TOOL_NAMES {
+        assert!(names.contains(&tool.to_string()), "{tool} missing: {names:?}");
+    }
+    assert!(!names.contains(&"create_draft".to_string()), "inbox tools must not reach the home agent");
+    assert_eq!(spatial_os::tools::allowlist::catalog().world_for(agent), Domain::Home);
+}
+
+#[tokio::test]
+async fn home_agents_keep_conservative_defaults_and_health_never_diagnoses() {
+    use spatial_os::agents::week::{health_escalation, health_lint, health_sanitize};
+    use spatial_os::domain::Domain;
+    use spatial_os::permissions::{Effect, Mode};
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+
+    let catalog = AllowlistCatalog::from_file(&common::manifest_dir().join("mcp_allowlists.toml")).expect("catalog");
+    for id in spatial_os::worlds::home::phase1_agent_ids() {
+        if let Some(spec) = catalog.spec_for(id) {
+            assert_eq!(spec.world, Domain::Home, "{id} must be tagged home");
+        }
+    }
+    let money = catalog.spec_for("money_agent").expect("money");
+    assert_eq!(money.mode, Mode::Observe);
+    assert!(money.tools.values().all(|e| *e == Some(Effect::Read)), "finance has zero non-read tools");
+    for id in ["family_agent", "personal_social_agent"] {
+        assert!(catalog.spec_for(id).expect(id).tools.is_empty());
+    }
+    // Personal Productivity carries exactly the shared tasks toolset (S4-T3), nothing that sends or publishes.
+    let personal = catalog.spec_for("personal_productivity_agent").expect("personal_productivity_agent");
+    assert!(personal.mcp_servers.iter().any(|m| m == spatial_os::tools::tasks::TOOLSET_ID));
+    let mut names: Vec<&str> = personal.tools.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    let mut expected = spatial_os::tools::tasks::TOOL_NAMES.to_vec();
+    expected.sort_unstable();
+    assert_eq!(names, expected);
+    assert!(personal.tools.values().all(|e| matches!(e, Some(Effect::Read) | Some(Effect::WriteLocal))), "{:?}", personal.tools);
+
+    let bad = "You have insomnia and a sleep disorder. Steps steady; avg sleep 4.6h.";
+    assert!(!health_lint(bad).is_empty());
+    let clean = health_sanitize(bad);
+    assert!(health_lint(&clean).is_empty() && clean.contains("Steps steady"), "{clean}");
+    assert!(health_escalation(4.6, 6).unwrap().contains("health professional"));
+    assert!(health_escalation(6.1, 6).is_none());
+    assert!(health_escalation(4.0, 2).is_none(), "needs at least five nights");
+
+    let fam = spatial_os::agents::family::build(spatial_os::memory::MemoryService::in_memory()).await.expect("family agent");
+    assert_eq!(fam.name(), "family_agent");
+    let social = spatial_os::agents::personal_social::build().await.expect("stub");
+    assert_eq!(social.name(), "personal_social_agent");
+}
