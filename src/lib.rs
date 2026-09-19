@@ -1,5 +1,12 @@
 pub mod ambient;
 pub mod agents;
+pub mod briefing;
+pub mod domain;
+pub mod intelligence;
+pub mod memory;
+pub mod mother;
+pub mod permissions;
+pub mod worlds;
 pub mod artifacts;
 pub mod auth;
 pub mod awp_gate;

@@ -165,6 +165,7 @@ pub fn stream_deck(
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card("deck", card),
                 })))
                 .await;
         }

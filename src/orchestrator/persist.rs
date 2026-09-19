@@ -16,12 +16,18 @@ pub fn agent_from_card(card: &serde_json::Value) -> AgentRecord {
         .and_then(|v| v.as_str())
         .unwrap_or(&title)
         .to_string();
+    let domain = card
+        .get("domain")
+        .and_then(|d| d.as_str())
+        .and_then(crate::domain::Domain::parse)
+        .unwrap_or_default();
     AgentRecord {
         id: agent.clone(),
         title,
         glyph,
         agent,
         rail: "active".into(),
+        domain,
     }
 }
 

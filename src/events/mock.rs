@@ -194,10 +194,14 @@ pub fn stream_intent_with_scenario(
             let delay_ms = card.get("delay").and_then(|v| v.as_u64()).unwrap_or(0);
             tokio::time::sleep(Duration::from_millis(500 + delay_ms)).await;
 
+            if let (Some(store), Some(sid)) = (&sessions, &session_id) {
+                crate::orchestrator::persist::card_spawn(store, sid, index, card.clone()).await;
+            }
             let _ = tx
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card(&key, card),
                 })))
                 .await;
 
@@ -231,6 +235,9 @@ pub fn stream_intent_with_scenario(
             }
 
             if let Some(resolve) = card.get("resolve") {
+                if let (Some(store), Some(sid)) = (&sessions, &session_id) {
+                    crate::orchestrator::persist::card_resolve(store, sid, index, card.clone(), resolve.clone(), false).await;
+                }
                 let _ = tx
                     .send(Ok(to_event(&FieldEvent::CardResolve {
                         index,

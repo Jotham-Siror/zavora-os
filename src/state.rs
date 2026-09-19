@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::agents::deck::McpPool;
+use crate::domain::Domain;
 use adk_awp::InMemoryEventSubscriptionService;
 
 use crate::ambient::AmbientStore;
@@ -36,6 +37,9 @@ pub struct CardRecord {
     pub resolve: Option<serde_json::Value>,
     pub pinned: bool,
     pub removed: bool,
+    /// Life domain of the card (ADR-002); `shared` for Phase 1 data.
+    #[serde(default)]
+    pub domain: Domain,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,7 +49,21 @@ pub struct AgentRecord {
     pub glyph: String,
     pub agent: String,
     pub rail: String,
+    /// Life domain of the agent (ADR-002); `shared` for Phase 1 data.
+    #[serde(default)]
+    pub domain: Domain,
 }
+
+/// One turn of the Mother chat (S1-T5). Kept short: the last [`CHAT_HISTORY_LIMIT`] turns.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatTurn {
+    /// `user` | `mother`
+    pub role: String,
+    pub text: String,
+    pub ts: chrono::DateTime<chrono::Utc>,
+}
+
+pub const CHAT_HISTORY_LIMIT: usize = 20;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionRecord {
@@ -57,6 +75,9 @@ pub struct SessionRecord {
     pub cards: Vec<CardRecord>,
     pub agents_active: Vec<AgentRecord>,
     pub agents_resting: Vec<AgentRecord>,
+    /// Mother chat transcript for this session (S1-T5).
+    #[serde(default)]
+    pub chat_history: Vec<ChatTurn>,
 }
 
 impl SessionRecord {
@@ -70,6 +91,7 @@ impl SessionRecord {
             cards: Vec::new(),
             agents_active: Vec::new(),
             agents_resting: Vec::new(),
+            chat_history: Vec::new(),
         }
     }
 }
@@ -196,6 +218,7 @@ impl SessionStore {
                 existing.pinned = pinned;
                 return;
             }
+            let domain = Domain::for_card(record.scenario.as_deref().unwrap_or(""), &card);
             record.cards.push(CardRecord {
                 index,
                 card,
@@ -203,6 +226,7 @@ impl SessionStore {
                 resolve,
                 pinned,
                 removed: false,
+                domain,
             });
             record.cards.sort_by_key(|c| c.index);
         })
@@ -226,8 +250,11 @@ impl SessionStore {
             .map(|r| r.cards.into_iter().filter(|c| !c.removed).collect())
     }
 
-    pub async fn agent_active(&self, session_id: &str, agent: AgentRecord) {
+    pub async fn agent_active(&self, session_id: &str, mut agent: AgentRecord) {
         self.mutate(session_id, |record| {
+            if agent.domain == Domain::Shared {
+                agent.domain = Domain::for_scenario(record.scenario.as_deref().unwrap_or(""));
+            }
             record.agents_resting.retain(|a| a.id != agent.id);
             if !record.agents_active.iter().any(|a| a.id == agent.id) {
                 record.agents_active.push(agent);
@@ -266,6 +293,27 @@ impl SessionStore {
         Some(agent)
     }
 
+    /// Append a Mother chat turn, keeping the last [`CHAT_HISTORY_LIMIT`] turns.
+    pub async fn append_chat(&self, session_id: &str, role: &str, text: &str) {
+        let turn = ChatTurn {
+            role: role.into(),
+            text: text.into(),
+            ts: chrono::Utc::now(),
+        };
+        self.mutate(session_id, |record| {
+            record.chat_history.push(turn);
+            if record.chat_history.len() > CHAT_HISTORY_LIMIT {
+                let drop = record.chat_history.len() - CHAT_HISTORY_LIMIT;
+                record.chat_history.drain(0..drop);
+            }
+        })
+        .await;
+    }
+
+    pub async fn chat_history(&self, session_id: &str) -> Vec<ChatTurn> {
+        self.get(session_id).await.map(|r| r.chat_history).unwrap_or_default()
+    }
+
     pub async fn list_agents(&self, session_id: &str) -> Option<(Vec<AgentRecord>, Vec<AgentRecord>)> {
         let record = self.get(session_id).await?;
         Some((record.agents_active, record.agents_resting))
@@ -274,7 +322,7 @@ impl SessionStore {
 
 async fn load_ui_session(pool: &PgPool, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
     let row = sqlx::query_as::<_, UiSessionRow>(
-        "SELECT session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting FROM ui_sessions WHERE session_id = $1",
+        "SELECT session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting, chat_history FROM ui_sessions WHERE session_id = $1",
     )
     .bind(session_id)
     .fetch_optional(pool)
@@ -289,6 +337,7 @@ async fn load_ui_session(pool: &PgPool, session_id: &str) -> anyhow::Result<Opti
         cards: serde_json::from_value(r.cards).unwrap_or_default(),
         agents_active: serde_json::from_value(r.agents_active).unwrap_or_default(),
         agents_resting: serde_json::from_value(r.agents_resting).unwrap_or_default(),
+        chat_history: serde_json::from_value(r.chat_history).unwrap_or_default(),
     }))
 }
 
@@ -297,9 +346,10 @@ async fn upsert_ui_session(pool: &PgPool, record: &SessionRecord) -> anyhow::Res
     let cards = serde_json::to_value(&record.cards)?;
     let agents_active = serde_json::to_value(&record.agents_active)?;
     let agents_resting = serde_json::to_value(&record.agents_resting)?;
+    let chat_history = serde_json::to_value(&record.chat_history)?;
 
     sqlx::query(
-        "INSERT INTO ui_sessions (session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (session_id) DO UPDATE SET user_id = $2, scenario = $3, origin_text = $4, artifacts = $5, cards = $6, agents_active = $7, agents_resting = $8, updated_at = NOW()",
+        "INSERT INTO ui_sessions (session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting, chat_history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (session_id) DO UPDATE SET user_id = $2, scenario = $3, origin_text = $4, artifacts = $5, cards = $6, agents_active = $7, agents_resting = $8, chat_history = $9, updated_at = NOW()",
     )
     .bind(&record.session_id)
     .bind(&record.user_id)
@@ -309,6 +359,7 @@ async fn upsert_ui_session(pool: &PgPool, record: &SessionRecord) -> anyhow::Res
     .bind(cards)
     .bind(agents_active)
     .bind(agents_resting)
+    .bind(chat_history)
     .execute(pool)
     .await?;
     Ok(())
@@ -324,11 +375,14 @@ struct UiSessionRow {
     cards: serde_json::Value,
     agents_active: serde_json::Value,
     agents_resting: serde_json::Value,
+    chat_history: serde_json::Value,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct RuntimeStatus {
     pub milestone: &'static str,
+    /// Phase 2 sprint the running build corresponds to (e.g. `P2-S0`).
+    pub phase: &'static str,
     pub agents_enabled: bool,
     pub postgres_enabled: bool,
     pub auth_enabled: bool,
@@ -360,6 +414,18 @@ pub struct AppState {
     pub lisbon_runner: Option<Arc<Runner>>,
     pub router_runner: Option<Arc<Runner>>,
     pub suzy_runner: Option<Arc<Runner>>,
+    /// LLM half of the Mother Agent (S1-T2); `None` without an API key.
+    pub mother_runner: Option<Arc<Runner>>,
+    /// Content-free activity ledger (S2-T1). Same instance the permission gate writes to.
+    pub ledger: crate::intelligence::LedgerService,
+    /// Per-user authority modes and the pause switch (S2-T8).
+    pub permissions: crate::permissions::PermissionStore,
+    /// Actions waiting for approval (S2-T7).
+    pub pending: crate::permissions::PendingActions,
+    /// Audit log of every executed / queued / denied effect (S2-T6).
+    pub audit: crate::permissions::AuditLog,
+    /// Personal memory — known · assumed · recommended (S3).
+    pub memory: crate::memory::MemoryService,
     pub session_service: SharedSessionService,
     pub auth: Option<Arc<crate::auth::AuthState>>,
     pub awp: Arc<crate::awp_gate::AwpGate>,
@@ -427,6 +493,12 @@ impl AppState {
             lisbon_runner,
             router_runner,
             suzy_runner,
+            mother_runner: None,
+            ledger: crate::permissions::gate::services().ledger.clone(),
+            permissions: crate::permissions::gate::services().permissions.clone(),
+            pending: crate::permissions::gate::services().pending.clone(),
+            audit: crate::permissions::gate::services().audit.clone(),
+            memory: crate::memory::service_handle().clone(),
             session_service,
             auth,
             awp,

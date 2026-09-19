@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use adk_awp::error_response::awp_error_response;
 use adk_awp::{
@@ -55,10 +54,7 @@ impl AwpGate {
         });
 
         Self {
-            rate_limiter: Arc::new(InMemoryRateLimiter::with_config(
-                limits,
-                Duration::from_secs(60),
-            )),
+            rate_limiter: Arc::new(InMemoryRateLimiter::with_config(limits)),
             trust_assigner,
             business_context,
         }

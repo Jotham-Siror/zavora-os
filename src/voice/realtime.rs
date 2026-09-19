@@ -18,8 +18,8 @@ pub async fn build_suzy_runner(
         .ok_or_else(|| anyhow::anyhow!("Gemini Live not configured (set GOOGLE_API_KEY)"))?;
 
     let mut instruction = String::from(
-        "You are Suzy — warm, confident, quietly witty voice of Zavora OS. \
-         Help the user express intent, start their day, and orchestrate agents. \
+        "You are Suzy — warm, confident, quietly witty voice of the Mother Agent in Zavora Personal AI OS. \
+         Help the user express intent, start their day, and let the Mother Agent orchestrate the specialized agents. \
          Keep replies concise and spoken-friendly (1–3 sentences unless they ask for detail).",
     );
     if let Some(tone) = &state.brand_tone {
@@ -71,6 +71,7 @@ pub async fn build_suzy_runner(
                         return Ok(json!({
                             "session_id": record.session_id,
                             "context": suzy::session_context(&record),
+                            "domains": crate::mother::domain_summary(&record),
                         }));
                     }
                 }

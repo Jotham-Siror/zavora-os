@@ -179,6 +179,7 @@ pub fn stream_morning(
                 .send(Ok(to_event(&FieldEvent::CardSpawn {
                     index,
                     card: card.clone(),
+                    domain: crate::domain::Domain::for_card("morning", card),
                 })))
                 .await;
         }
@@ -188,9 +189,16 @@ pub fn stream_morning(
             if has_calendar { "live" } else { "unavailable — use general context" },
             if has_inbox { "live" } else { "unavailable — use general context" },
         );
+        // Profile facts from memory replace hardcoded defaults (S3-T6).
+        let memory = crate::memory::service_handle();
+        let profile = format!(
+            "[Profile]\nhome_location: {}\ntimezone: {}",
+            memory.profile(&user_id, "home_location").await.unwrap_or_else(|| "unknown".into()),
+            memory.profile(&user_id, "timezone").await.unwrap_or_else(|| "unknown".into()),
+        );
 
         let prompt = format!(
-            "{intent}\n\n{integrations}\nPrepare the morning briefing cards.",
+            "{intent}\n\n{integrations}\n{profile}\nPrepare the morning briefing cards.",
         );
 
         let content = Content::new("user").with_text(&prompt);

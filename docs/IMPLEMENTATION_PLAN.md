@@ -15,14 +15,49 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 | M1 Real deck | `milestone/M1-deck` | ✅ done | `v0.1.0-m1` |
 | M2 Combine | `milestone/M2-combine` | ✅ done | `v0.2.0-m2` |
 | M3 Morning | `milestone/M3-morning` | ✅ done | `v0.3.0-m3` |
-| M4 Persistence | `milestone/M4-persistence` | 🟡 In progress | `v0.4.0-m4` |
-| M5 Suzy + router | `milestone/M5-coordinator` | ⬜ | `v0.5.0-m5` |
-| M6 Scenarios | `milestone/M6-scenarios` | ⬜ | `v0.6.0-m6` |
-| M7 Proactive | `milestone/M7-proactive` | ⬜ | `v0.7.0-m7` |
-| M8 Rails polish | `milestone/M8-rails` | ⬜ | `v0.8.0-m8` |
-| M9 Auth + DB | `milestone/M9-auth` | ⬜ | `v0.9.0-m9` |
-| M10 Live voice | `milestone/M10-voice` | ⬜ | `v1.0.0-m10` |
-| M11 Deploy | `milestone/M11-deploy` | ⬜ | `v1.0.0` |
+| M4 Persistence | `milestone/M4-persistence` | ✅ code on `main` (validation gate unrecorded) | `v0.4.0-m4` |
+| M5 Suzy + router | `milestone/M5-coordinator` | ✅ code on `main` — `src/agents/{suzy,router}.rs` (validation gate unrecorded) | `v0.5.0-m5` |
+| M6 Scenarios | `milestone/M6-scenarios` | ✅ code on `main` — live/people/week/lisbon workflows; flights/health/stay are labeled stubs (BK-009/010) | `v0.6.0-m6` |
+| M7 Proactive | `milestone/M7-proactive` | ✅ code on `main` — `src/ambient/`, AWP event subscriptions | `v0.7.0-m7` |
+| M8 Rails polish | `milestone/M8-rails` | ✅ code on `main` — `src/rails/`, `/api/people`, `/api/live`, `/api/rails/background` | `v0.8.0-m8` |
+| M9 Auth + DB | `milestone/M9-auth` | ✅ code on `main` — `pg_session.rs`, `auth.rs`, migrations 001–003, allowlist catalog | `v0.9.0-m9` |
+| M10 Live voice | `milestone/M10-voice` | ✅ code on `main` — `src/voice/`, `/ws/voice` | `v1.0.0-m10` |
+| M11 Deploy | `milestone/M11-deploy` | ✅ code on `main` — Dockerfile, Caddy, CI; runtime reports `milestone: "M11"` | `v1.0.0` |
+
+> **Reconciled 2026-09-19 (Phase 2 · S0-T1).** Statuses above were derived from the code and CI on `main` at
+> `228ec78`, not from recorded sign-offs: the per-milestone **Validation** checklists for M0–M11 were never
+> ticked in this file. Upstream has no release tags yet, so the Tag column lists the *intended* tags.
+> Treat the unticked validation scripts as an open ticket (BK-100) rather than as missing code.
+
+## Phase 2 — Personal AI OS (Release R1 · Foundation)
+
+Concept: [`PERSONAL_AI_OS.md`](./PERSONAL_AI_OS.md) · Plan: [`SPRINT_PLAN.md`](./SPRINT_PLAN.md) · ADRs: [`adr/`](./adr/)
+
+| Sprint | Branch | Status | Tag |
+|--------|--------|--------|-----|
+| S0 Align & scaffold | `phase2/r1-foundation` | ✅ code + tests (validation script below awaits product-owner sign-off) | `v1.0.1-p2` |
+| S1 Mother Agent v1 | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.1.0-p2` |
+| S2 Ledger + permission modes | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.2.0-p2` |
+| S3 Personal memory v1 | `phase2/r1-foundation` | ✅ code + tests (validation awaits sign-off) | `v1.3.0-p2` |
+
+### R1 validation script (product owner)
+
+Offline (no API key, no Postgres) — everything streams its mock, the Mother still orchestrates:
+
+- [ ] `cargo test --lib` and `cargo test --test validate -- mother_ domain_ gate_ permission_ pending_ ledger_ memory_ effects_` are green
+- [ ] `cargo run` → `GET /health` reports `"phase": "P2-S3"`; `GET /awp/manifest` lists `chat_mother`, `list_actions`, `approve_action`, `get_permissions`, `set_permissions`, `pause_agents`, `record_ui_events`, `manage_memory`
+- [ ] `POST /api/sessions/{sid}/chat {"text":"What's happening with work?"}` → one `scenario` event with `total_cards: 6`, cards re-indexed 0–5, one `suzy_summary` with `key: "mother"`, `done`
+- [ ] `{"text":"Build me a pitch deck"}` → unchanged deck stream; `{"text":"hmm"}` → one clarifying question
+- [ ] `{"text":"Remember I live in Nairobi"}` → "I'll remember" reply; `GET /api/greeting?session_id={sid}` uses Nairobi for weather when the weather MCP is connected
+- [ ] `GET /api/memory?session_id={sid}` without a JWT → AWP error envelope (403); with dev sign-in → the item with `kind: "known"` and `provenance[0].kind: "user_statement"`
+
+Live (API key + `mcp-email` connected):
+
+- [ ] `PUT /api/permissions {"agent_id":"inbox_agent","mode":"suggest"}` → "Start my day" → "Draft replies" creates drafts (write_local runs), nothing is sent
+- [ ] Any `send_*` tool call → `permission_request` event on the stream and a row in `GET /api/actions`; `POST /api/actions/{id}/approve` executes it and `GET /api/audit` shows `decision: "approved"`
+- [ ] `PUT /api/permissions {"agent_id":"inbox_agent","mode":"observe"}` → the same flow yields facts only and `GET /api/audit` shows `denied`
+- [ ] `POST /api/pause {"scope":"all"}` → every write returns `status: "paused"`; `POST /api/resume` restores
+- [ ] `SELECT meta, subject_hash FROM activity_events LIMIT 20` contains no bodies, subjects or names
 
 **Legend:** ⬜ not started · 🟡 in progress · ✅ done
 
@@ -411,6 +446,7 @@ Tick boxes as you complete work. Merge to `main` only after the milestone **vali
 - [ ] **BK-011** `mcp-registry` integration (M9)
 - [ ] **BK-012** A2A message type routing table (M0)
 - [ ] **BK-013** Manifest sync script — `business.toml` ↔ routes (ongoing)
+- [ ] **BK-100** Run and record the M0–M11 validation scripts (statuses above are code-derived)
 
 ---
 

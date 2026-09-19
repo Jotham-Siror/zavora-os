@@ -12,6 +12,8 @@ pub enum FieldEvent {
     CardSpawn {
         index: usize,
         card: serde_json::Value,
+        /// Life domain of the card (ADR-002).
+        domain: crate::domain::Domain,
     },
     CardStatus {
         index: usize,
@@ -49,6 +51,22 @@ pub enum FieldEvent {
         sub: String,
         artifact_url: Option<String>,
         slide_count: Option<u32>,
+    },
+    /// A tool call was queued for the user's approval (S2-T7).
+    PermissionRequest {
+        action_id: String,
+        agent_id: String,
+        domain: crate::domain::Domain,
+        effect: String,
+        summary: String,
+        expires_at: String,
+    },
+    /// A pending action was resolved (approved / rejected / failed / expired).
+    ActionResult {
+        action_id: String,
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        audit_id: Option<String>,
     },
     Done,
 }

@@ -68,6 +68,7 @@ pub async fn snooze_agent(
                 glyph,
                 agent: agent_name,
                 rail: "resting".into(),
+                domain: Default::default(),
             },
         )
         .await;

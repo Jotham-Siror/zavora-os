@@ -122,12 +122,17 @@ pub fn filtered(
     ))
 }
 
-/// Apply the MCP Registry allowlist for `agent` from `mcp_allowlists.toml`.
+/// Apply the MCP Registry allowlist for `agent` from `mcp_allowlists.toml`, then the
+/// permission gate (ADR-003): every tool call is checked against the agent's mode and the
+/// tool's effect class before it reaches MCP.
 pub fn filtered_for_agent(
     agent: &str,
     toolset: Arc<dyn adk_core::Toolset>,
 ) -> Arc<dyn adk_core::Toolset> {
     let allowed = crate::tools::allowlist::tools_for_agent(agent);
     let refs: Vec<&str> = allowed.iter().map(|s| s.as_str()).collect();
-    filtered(wrap_toolset(toolset), &refs)
+    let filtered = filtered(wrap_toolset(toolset), &refs);
+    let gated = crate::permissions::PermissionGate::wrap(agent, filtered);
+    // Every agent can read memory within its world and propose assumed items (S3-T3).
+    crate::tools::merge::MergedToolset::new(vec![gated, crate::memory::tools::MemoryTools::for_agent(agent)])
 }
