@@ -54,9 +54,32 @@
       }
       cardsData.cards.forEach((entry, i) => {
         const spec = entry.card || entry;
+        if (entry.domain && !spec.domain) spec.domain = entry.domain;
         cards.set(entry.index ?? i, { spec, card: { el: null } });
       });
       return true;
+    }
+
+    // S4-T8: per-agent authority modes for the badge layer. Anonymous sessions get a
+    // 401/403 from the "known"-level route — badges simply stay off (no fabricated modes).
+    async function fetchModes() {
+      if (!sessionId) return;
+      try {
+        const res = await fetch(
+          `/api/permissions?session_id=${encodeURIComponent(sessionId)}`,
+          { credentials: 'include' }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const map = {};
+        (data.agents || []).forEach((a) => {
+          map[a.agent_id] = a.mode;
+        });
+        window.__ZAVORA_MODES__ = map;
+        if (ui.applyModeBadges) ui.applyModeBadges();
+      } catch (_) {
+        /* offline / not signed in */
+      }
     }
 
     async function initSession() {
@@ -152,7 +175,8 @@
       cards.clear();
     }
 
-    function spawnCard(index, spec) {
+    function spawnCard(index, spec, domain) {
+      if (domain && !spec.domain) spec.domain = domain;
       const card = ui.buildCard(spec);
       ui.cardsEl.appendChild(card.el);
       card.el.animate(
@@ -212,7 +236,7 @@
           beginScenario(ev.key, ev.text || intentText, ev.total_cards || 0);
           break;
         case 'card_spawn':
-          spawnCard(ev.index, ev.card);
+          spawnCard(ev.index, ev.card, ev.domain);
           break;
         case 'card_status':
           updateStatus(ev.index, ev.status, ev.line);
@@ -361,7 +385,9 @@
 
     wirePersistence();
     window.addEventListener('zavora:voice-intent', onVoiceIntent);
-    initSession().catch(() => ensureSession().catch(() => {}));
+    initSession()
+      .catch(() => ensureSession().catch(() => {}))
+      .then(() => fetchModes());
     console.info('[zavora] live mode — SSE orchestration + persistence enabled');
   }
 

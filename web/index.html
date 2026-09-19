@@ -543,6 +543,16 @@
     .flow-nav { display: none !important; }
   }
 
+  /* ---------- Phase 2 (ADR-002/003): life-domain colours + permission mode badges ---------- */
+  :root { --dom-work: #5b8cff; --dom-home: #3ddc97; }
+  .card.dom-work::before { background: linear-gradient(135deg, rgba(91,140,255,.55), transparent 40%, rgba(91,140,255,.30)); }
+  .card.dom-work .glyph { background: linear-gradient(135deg, rgba(91,140,255,.35), rgba(91,140,255,.18)); }
+  .card.dom-home::before { background: linear-gradient(135deg, rgba(61,220,151,.50), transparent 40%, rgba(61,220,151,.28)); }
+  .card.dom-home .glyph { background: linear-gradient(135deg, rgba(61,220,151,.32), rgba(61,220,151,.16)); }
+  .tile.dom-work .av { background: linear-gradient(135deg, rgba(91,140,255,.40), rgba(91,140,255,.20)); }
+  .tile.dom-home .av { background: linear-gradient(135deg, rgba(61,220,151,.38), rgba(61,220,151,.18)); }
+  .mode-badge { margin-left: 5px; font-size: 10px; opacity: .75; cursor: default; }
+
   /* tiny phones */
   @media (max-width: 380px) {
     .detail .trays { grid-template-columns: 1fr; }
@@ -935,9 +945,56 @@ function launch(text){
   });
 }
 
+// ---------- Phase 2 (S4-T8): domain colour + permission mode badge ----------
+// Modes arrive from GET /api/permissions (field-client.js sets window.__ZAVORA_MODES__).
+// Badges render only for agents we can match to an allowlist id — never guessed.
+const MODE_BADGES = {
+  observe:  { icon: '👁', label: 'Observe — reads and reports only' },
+  suggest:  { icon: '💡', label: 'Suggest — prepares actions for your approval' },
+  automate: { icon: '⚡', label: 'Automate — runs approved recipes' },
+};
+// Card specs use display agent names (calendar.agent); permissions use allowlist ids
+// (calendar_agent). Shim until S4 re-homing aligns the ids.
+const AGENT_ALLOWLIST_IDS = {
+  'auto-excel': 'excel_agent', 'auto-docs': 'docs_agent', 'auto-slides': 'slides_agent',
+  'people.agent': 'priya_agent', 'crm.agent': 'connections_agent',
+  'finance.agent': 'money_agent', 'work.agent': 'focus_agent', 'live.agent': 'now_agent',
+};
+function allowlistIdFor(agent, title){
+  if (!agent) return null;
+  const modes = window.__ZAVORA_MODES__ || {};
+  if (agent === 'news.agent') return title === 'Headlines' ? 'headlines_agent' : 'brief_agent';
+  if (AGENT_ALLOWLIST_IDS[agent]) return AGENT_ALLOWLIST_IDS[agent];
+  const guess = agent.replace(/\.agent$/, '') + '_agent';
+  if (modes[guess]) return guess;
+  return modes[agent] ? agent : null;
+}
+function applyModeBadge(el, agent, title){
+  const modes = window.__ZAVORA_MODES__;
+  if (!modes) return;
+  const id = allowlistIdFor(agent, title);
+  const badge = id && MODE_BADGES[modes[id]];
+  if (!badge) return;
+  const host = el.querySelector('.agent') || el.querySelector('.who');
+  if (!host || host.querySelector('.mode-badge')) return;
+  const b = document.createElement('span');
+  b.className = 'mode-badge';
+  b.textContent = badge.icon;
+  b.title = badge.label;
+  host.appendChild(b);
+}
+function applyModeBadges(){
+  document.querySelectorAll('.card, .tile').forEach((el) =>
+    applyModeBadge(el, el.dataset.agent, el.dataset.title));
+}
+
 function buildCard(s){
   const el = document.createElement('div');
   el.className = 'card' + (s.attention ? ' attention' : '') + (s.surface ? ' surface' : '');
+  if (s.domain === 'work' || s.domain === 'home') el.classList.add('dom-' + s.domain);
+  el.dataset.domain = s.domain || 'shared';
+  el.dataset.agent = s.agent || '';
+  el.dataset.title = s.title || '';
   el.dataset.depth = (Math.random()*1.4 + .6).toFixed(2);
   el.innerHTML = `
     <div class="pill">● Act now</div>
@@ -956,6 +1013,7 @@ function buildCard(s){
   const status = el.querySelector('.status');
   const stText = el.querySelector('.st');
 
+  applyModeBadge(el, s.agent, s.title);
   attachVerbs({ el, body, act, status, stText });
   return { el, body, act, status, stText };
 }
@@ -1794,7 +1852,10 @@ function agentActive(s){
   clearEmpty(activeEl);
   const t = document.createElement('div');
   t.className = 'tile agent-tile'; t.dataset.id = id;
+  if (s.domain === 'work' || s.domain === 'home') t.classList.add('dom-' + s.domain);
+  t.dataset.agent = s.agent || ''; t.dataset.title = s.title || '';
   t.innerHTML = `<div class="spin"></div><div class="who">${s.title}<small>${id}</small></div>`;
+  applyModeBadge(t, s.agent, s.title);
   activeEl.appendChild(t); active.set(id, { tile:t, spec:s });
 }
 function agentDone(s){
@@ -1812,7 +1873,9 @@ function snoozeAgent(title){
   clearEmpty(restingEl);
   const t = document.createElement('div');
   t.className = 'tile resting'; t.dataset.id = id;
+  t.dataset.agent = spec.agent || ''; t.dataset.title = spec.title || '';
   t.innerHTML = `<div class="av">${spec.glyph}</div><div class="who">${spec.title}<small>snoozed</small></div><span class="zzz">z</span>`;
+  applyModeBadge(t, spec.agent, spec.title);
   t.addEventListener('click', () => wakeAgent(id, spec));
   restingEl.appendChild(t); resting.set(id, spec);
   sfx('snooze');
@@ -1839,6 +1902,7 @@ function hydrateField(payload){
   resetAgents();
   cards.forEach((entry) => {
     const spec = entry.card || entry;
+    if (entry.domain && !spec.domain) spec.domain = entry.domain;
     const built = buildCard(spec);
     built.el.dataset.title = spec.title || '';
     cardsEl.appendChild(built.el);
@@ -1864,7 +1928,9 @@ function hydrateAgents(payload){
     const t = document.createElement('div');
     t.className = 'tile resting';
     t.dataset.id = id;
+    t.dataset.agent = spec.agent || ''; t.dataset.title = spec.title || '';
     t.innerHTML = `<div class="av">${spec.glyph}</div><div class="who">${spec.title}<small>snoozed</small></div><span class="zzz">z</span>`;
+    applyModeBadge(t, spec.agent, spec.title);
     t.addEventListener('click', () => wakeAgent(id, spec));
     restingEl.appendChild(t);
     resting.set(id, spec);
@@ -2284,6 +2350,7 @@ window.__ZAVORA_UI__ = {
   setCurrentKey(v) { currentKey = v; },
   setResolvedCount(v) { resolvedCount = v; },
   setTotalCards(v) { totalCards = v; },
+  applyModeBadges,
   armSuggestion,
   showSuzyCustom(html, audioClip) {
     suzyText.innerHTML = html;
