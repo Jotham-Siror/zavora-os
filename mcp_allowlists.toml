@@ -390,3 +390,25 @@ tools = ["search_properties_nearby", "geocode_search"]
 [allowlist.effects]
 search_properties_nearby = "read"
 geocode_search = "read"
+
+# --- Phase 2 · S4 work agents without an MCP server yet (labeled stubs, BK-101) ---
+
+[[allowlist]]
+agent = "career_agent"
+world = "work"
+mode = "observe"
+mcp_server = "none"
+reason = "Career — labeled stub until a career/network MCP exists"
+tools = []
+
+[allowlist.effects]
+
+[[allowlist]]
+agent = "professional_social_agent"
+world = "work"
+mode = "observe"
+mcp_server = "none"
+reason = "Professional social media — labeled stub until a LinkedIn MCP exists"
+tools = []
+
+[allowlist.effects]

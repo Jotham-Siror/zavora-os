@@ -55,6 +55,7 @@ The only hard cross-track dependency is that observations surface inside the bri
 | Team sprint | Dates | James | Kim | Robert | Jotham | Tag on completion |
 |---|---|---|---|---|---|---|
 | A | TBD | 🟡 | ⬜ | ⬜ | ✅ | `v1.4.0-p2` |
+| A | TBD | 🟡 | 🟡 | ⬜ | 🟡 | `v1.4.0-p2` |
 | B | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.5.0-p2` |
 | C | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.6.0-p2` (R2) |
 | D | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.9.0-p2` (R3) |
@@ -96,7 +97,7 @@ Owns the mother, worlds, agents and briefing modules. Re-homing is metadata on e
 
 | Team sprint | Plan tasks | What ships | Hand-off | Status |
 |---|---|---|---|---|
-| **A** | S4-T1 · S4-T2 · S4-T4 · S4-T5 · S4-T6 · S4-T7 · S4-T9 | `work_mother` parallel fan-out returning one structured result. Work agents tagged and scoped (productivity, email, team_comms, project, research_knowledge, work_automation). Email follow-up tracker from hashed subjects. Career and Professional Social as **labeled stubs** (BK-101). Allowlist entries with effects and default modes. Tests: fan-out ≥ 3 results, 3-day-old thread flagged, no finance/health tools in any work agent. | Needs task tools from James mid-sprint | ⬜ |
+| **A** | S4-T1 · S4-T2 · S4-T4 · S4-T5 · S4-T6 · S4-T7 · S4-T9 | `work_mother` parallel fan-out returning one structured result. Work agents tagged and scoped (productivity, email, team_comms, project, research_knowledge, work_automation). Email follow-up tracker from hashed subjects. Career and Professional Social as **labeled stubs** (BK-101). Allowlist entries with effects and default modes. Tests: fan-out ≥ 3 results, 3-day-old thread flagged, no finance/health tools in any work agent. | S4-T3 landed in PR #9: Productivity inherits the `tasks` toolset through `calendar_agent`; the morning calendar adapter still fills the cards | 🟡 `phase2/S04-work-world` (PR #5), rebased on #6 and #9 |
 | **B** | S5-T1 · S5-T2 · S5-T3 agent · S5-T4 · S5-T5 · S5-T7 prompt · S5-T9 | `home_mother`. Home agents re-homed (finance, health_wellness, entertainment, social_fun, travel). Family agent (calendar id from memory, imported contacts, important dates) and Personal Productivity agent. Personal Social labeled stub (BK-102). Health prompt guardrail (no diagnosis vocabulary, escalation sentence). Tests: family routing, finance has zero non-read tools, health lint blocks a diagnosis, identity separation. | Needs contacts migration from James | ⬜ |
 | **C** | S6-T1 · S6-T2 · S6-T3 · S6-T4 · S6-T5 · S6-T8 · S6-T9 | `AgentMessage` bus with trace ids, fan-out depth cap 2, timeouts. Mothers publish and consume. Journey §13.5 (email → availability → prep → one recommendation → approve sends and books). Journey §13.3 overlap check. Arbitration v1 (protected time, dedupe into one question). Voice reads the briefing. Tests: bus round-trip, six-section briefing with empty states, conflict fixture yields one question and two pending actions. | Conflict observations arrive from Jotham (S8-T2) | ⬜ |
 | **D** | S7-T6 · S9-T4 · S9-T5 | Mother `read_observations` tool; observations surface only in the briefing or on "how am I doing?", never mid-task. `reading_knowledge` agent and `query_knowledge` Mother tool (§13.6). Career consumes rising topics; Research schedules briefs on them (Observe). | Needs knowledge API from Jotham and James | ⬜ |
@@ -169,7 +170,7 @@ These tasks currently sit inside James's and Robert's tables. When the fifth per
 | ADR-006 prerequisites: Phase 2 requires login + `DATABASE_URL`; define what the anonymous / in-memory path does (recommendation: demo only). Unify `user_id` type (existing `VARCHAR(255)` vs. `users.id UUID`). | James | Sprint A, week 1 — **Proposed** in PR #6 (`docs/adr/006-…`); `user_id` stays `TEXT` by decision |
 | Consent persistence: `InMemoryConsentService` still bound in `main.rs`. | James | Sprint A — done in PR #9 (`src/memory/consent.rs`, `GET/PUT /api/consents`) |
 | R1 validation script never run; S0–S3 marked "PO validation pending". | James (fifth seat when filled) | before Sprint A |
-| `docs/personal-ai-os.html` links to the fork branch instead of upstream `main`. | Kim | Sprint A |
+| `docs/personal-ai-os.html` links to the fork branch instead of upstream `main`. | Kim | ✅ fixed in `phase2/S04-work-world` |
 | CI triggers only on `main` and `milestone/**` pushes; add `phase2/**` and `docs/**`. | James | Sprint A — done in PR #6 |
 | `cargo run` stopped starting the server after R1 added `src/bin/load_ledger.rs` (README and CLAUDE.md still say `cargo run`). | James | Sprint A — fixed in PR #9 (`default-run`) |
 

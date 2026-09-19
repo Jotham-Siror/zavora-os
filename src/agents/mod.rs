@@ -1,6 +1,7 @@
 pub mod ambient;
 pub mod brief;
 pub mod calendar;
+pub mod career;
 pub mod combine;
 pub mod deck;
 pub mod docs;
@@ -11,6 +12,7 @@ pub mod live;
 pub mod lisbon;
 pub mod morning;
 pub mod people;
+pub mod professional_social;
 pub mod router;
 pub mod slides;
 pub mod stub;
