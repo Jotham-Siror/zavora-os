@@ -60,6 +60,64 @@
       return true;
     }
 
+    // S2-T2: content-free UI signals for the activity ledger. Counts, domains and
+    // durations only — never titles, text or anything the user is looking at.
+    const uiQueue = [];
+    const cardOpenTs = new WeakMap();
+    let focusedSince = document.hasFocus() ? Date.now() : null;
+
+    function queueUiEvent(kind, extra) {
+      uiQueue.push(Object.assign({ kind }, extra || {}));
+      if (uiQueue.length >= 40) flushUiEvents();
+    }
+
+    function flushUiEvents(unloading) {
+      if (!sessionId || !uiQueue.length) return;
+      const body = JSON.stringify({ events: uiQueue.splice(0, 200) });
+      const url = `/api/sessions/${sessionId}/events`;
+      try {
+        if (unloading && navigator.sendBeacon) {
+          navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+          return;
+        }
+        fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          keepalive: !!unloading,
+        }).catch(() => {});
+      } catch (_) {
+        /* telemetry must never break the UI */
+      }
+    }
+
+    function wireUiSignals() {
+      window.addEventListener('focus', () => {
+        focusedSince = Date.now();
+        queueUiEvent('ui_focus');
+      });
+      window.addEventListener('blur', () => {
+        const spent = focusedSince ? Date.now() - focusedSince : null;
+        focusedSince = null;
+        queueUiEvent('ui_blur', spent ? { duration_ms: spent } : {});
+      });
+      document.addEventListener('click', (e) => {
+        const card = e.target.closest && e.target.closest('.card');
+        if (!card) return;
+        const now = Date.now();
+        if ((cardOpenTs.get(card) || 0) + 5000 > now) return; // dedupe drag/click bursts
+        cardOpenTs.set(card, now);
+        queueUiEvent('ui_card_open', { domain: card.dataset.domain || 'shared' });
+      });
+      window.addEventListener('zavora:field-event', (e) => {
+        const t = e.detail && e.detail.type;
+        if (t === 'suzy_summary' || t === 'permission_request') queueUiEvent('ui_notification');
+      });
+      setInterval(() => flushUiEvents(), 20000);
+      window.addEventListener('pagehide', () => flushUiEvents(true));
+    }
+
     // S4-T8: per-agent authority modes for the badge layer. Anonymous sessions get a
     // 401/403 from the "known"-level route — badges simply stay off (no fabricated modes).
     async function fetchModes() {
@@ -422,6 +480,7 @@
     };
 
     wirePersistence();
+    wireUiSignals();
     window.addEventListener('zavora:voice-intent', onVoiceIntent);
     initSession()
       .catch(() => ensureSession().catch(() => {}))
