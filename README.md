@@ -61,3 +61,4 @@ cargo test --test validate deck_workflow_writes_three_artifacts -- --ignored
 - [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 - [Personal AI OS — concept & architecture (Phase 2)](docs/PERSONAL_AI_OS.md)
 - [Personal AI OS — sprint plan (Phase 2)](docs/SPRINT_PLAN.md)
+- [Personal AI OS — interactive one-page artifact](docs/personal-ai-os.html) (open locally or via a raw HTML preview)
