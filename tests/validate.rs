@@ -220,6 +220,7 @@ async fn session_persistence_cards_and_agents() {
                 glyph: "📊".into(),
                 agent: "auto-excel".into(),
                 rail: "resting".into(),
+                domain: Default::default(),
             },
         )
         .await;
@@ -358,22 +359,20 @@ fn voice_state_boots_when_api_key_present() {
 
 fn awp_test_state() -> adk_awp::AwpState {
     use adk_awp::{
-        AwpState, BusinessContextLoader, DefaultTrustAssigner, HealthStateMachine,
-        InMemoryConsentService, InMemoryEventSubscriptionService, InMemoryRateLimiter,
+        AwpState, BusinessContextLoader, DefaultTrustAssigner, InMemoryConsentService,
+        InMemoryEventSubscriptionService, InMemoryRateLimiter,
     };
     use std::sync::Arc;
 
     let path = common::manifest_dir().join("business.toml");
     let loader = BusinessContextLoader::from_file(&path).expect("business.toml");
     let event_service = Arc::new(InMemoryEventSubscriptionService::new());
-    AwpState {
-        business_context: loader.context_ref(),
-        rate_limiter: Arc::new(InMemoryRateLimiter::new()),
-        consent_service: Arc::new(InMemoryConsentService::new()),
-        event_service: event_service.clone(),
-        health: Arc::new(HealthStateMachine::new(event_service)),
-        trust_assigner: Arc::new(DefaultTrustAssigner),
-    }
+    AwpState::builder(loader.context_ref())
+        .rate_limiter(Arc::new(InMemoryRateLimiter::new()))
+        .consent_service(Arc::new(InMemoryConsentService::new()))
+        .event_service(event_service)
+        .trust_assigner(Arc::new(DefaultTrustAssigner))
+        .build()
 }
 
 #[tokio::test]
@@ -479,6 +478,7 @@ async fn health_exposes_runtime_status() {
     ));
     let runtime = spatial_os::state::RuntimeStatus {
         milestone: "M11",
+        phase: "P2-S0",
         agents_enabled: config.agents_enabled(),
         postgres_enabled: config.postgres_enabled(),
         auth_enabled: config.auth_enabled(),
@@ -716,6 +716,7 @@ async fn ui_session_persists_across_store_instances() {
                 glyph: "📊".into(),
                 agent: "deck.agent".into(),
                 rail: "active".into(),
+                domain: Default::default(),
             },
         )
         .await;
@@ -985,4 +986,94 @@ async fn deck_workflow_writes_three_artifacts() {
             .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some(ext));
         assert!(found, "expected .{ext} in {}", session_dir.display());
     }
+}
+// ---------------------------------------------------------------------------
+// Phase 2 · S0 — domain model and agent contract
+// ---------------------------------------------------------------------------
+
+#[test]
+fn domain_card_spawn_event_carries_domain() {
+    use spatial_os::domain::Domain;
+    use spatial_os::events::sse::FieldEvent;
+
+    let card = serde_json::json!({"glyph":"✉️","title":"Needs you","agent":"inbox.agent"});
+    let ev = FieldEvent::CardSpawn {
+        index: 1,
+        card: card.clone(),
+        domain: Domain::for_card("morning", &card),
+    };
+    let json = serde_json::to_value(&ev).expect("serialize");
+    assert_eq!(json["type"], "card_spawn");
+    assert_eq!(json["domain"], "work");
+
+    // Phase 1 JSON without a domain still deserializes (default = shared).
+    let legacy = r#"{"index":0,"card":{},"status":"spawn","resolve":null,"pinned":false,"removed":false}"#;
+    let rec: spatial_os::state::CardRecord = serde_json::from_str(legacy).expect("legacy card");
+    assert_eq!(rec.domain, Domain::Shared);
+}
+
+#[tokio::test]
+async fn domain_is_derived_when_cards_are_persisted() {
+    use spatial_os::domain::Domain;
+    let store = spatial_os::state::SessionStore::new();
+    let rec = store.create_for_user("u-domain".into()).await;
+    store.set_scenario(&rec.session_id, "deck", Some("Build me a pitch deck")).await;
+    store
+        .upsert_card(&rec.session_id, 0, serde_json::json!({"title":"Auto-Excel","agent":"auto-excel"}), "spawn", None, false)
+        .await;
+    store
+        .upsert_card(&rec.session_id, 1, serde_json::json!({"title":"Family","agent":"x","domain":"home"}), "spawn", None, false)
+        .await;
+    let cards = store.list_cards(&rec.session_id).await.expect("cards");
+    assert_eq!(cards[0].domain, Domain::Work);
+    assert_eq!(cards[1].domain, Domain::Home);
+}
+
+#[test]
+fn mcp_allowlist_specs_declare_world_and_mode() {
+    use spatial_os::domain::Domain;
+    use spatial_os::permissions::Mode;
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+
+    let path = common::manifest_dir().join("mcp_allowlists.toml");
+    let catalog = AllowlistCatalog::from_file(&path).expect("catalog");
+    let inbox = catalog.spec_for("inbox_agent").expect("inbox spec");
+    assert_eq!(inbox.world, Domain::Work);
+    assert_eq!(inbox.mode, Mode::Suggest);
+    assert!(inbox.tool_names().contains(&"create_draft".to_string()));
+
+    let money = catalog.spec_for("money_agent").expect("money spec");
+    assert_eq!(money.world, Domain::Home);
+    assert_eq!(money.mode, Mode::Observe);
+
+    // Unknown agents fall back to the safe defaults.
+    assert_eq!(catalog.mode_for("nobody"), Mode::Suggest);
+    assert_eq!(catalog.world_for("nobody"), Domain::Shared);
+    // S0 only reports missing effects; S2 makes them a boot failure.
+    catalog.validate_effects(false).expect("lenient validation");
+    assert!(catalog.effects_for_unknown_tools().is_empty());
+}
+
+#[test]
+fn mcp_allowlist_schema_is_backward_compatible() {
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+    let legacy: Vec<spatial_os::tools::allowlist::AllowlistEntry> = toml::from_str::<toml::Value>(
+        r#"
+[[allowlist]]
+agent = "legacy_agent"
+mcp_server = "news"
+tools = ["search_news"]
+"#,
+    )
+    .expect("toml")
+    .get("allowlist")
+    .cloned()
+    .expect("array")
+    .try_into()
+    .expect("entries");
+    let catalog = AllowlistCatalog::from_entries(legacy);
+    let spec = catalog.spec_for("legacy_agent").expect("spec");
+    assert_eq!(spec.mode, spatial_os::permissions::Mode::Suggest);
+    assert_eq!(spec.world, spatial_os::domain::Domain::Shared);
+    assert_eq!(catalog.tools_missing_effects(), vec![("legacy_agent".to_string(), "search_news".to_string())]);
 }

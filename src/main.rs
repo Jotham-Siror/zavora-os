@@ -21,8 +21,9 @@ use std::sync::Arc;
 
 use adk_awp::{
     handlers, middleware::version_negotiation, AwpState, BusinessContextLoader,
-    HealthStateMachine, InMemoryConsentService, InMemoryEventSubscriptionService,
+    InMemoryConsentService, InMemoryEventSubscriptionService,
 };
+use awp_types::TrustLevel;
 use adk_runner::Runner;
 use adk_session::{CreateRequest, InMemorySessionService};
 use axum::middleware::from_fn;
@@ -236,6 +237,7 @@ async fn main() -> anyhow::Result<()> {
 
     let runtime = spatial_os::state::RuntimeStatus {
         milestone: "M11",
+        phase: "P2-S0",
         agents_enabled: config.agents_enabled(),
         postgres_enabled: config.postgres_enabled(),
         auth_enabled: config.auth_enabled(),
@@ -294,14 +296,15 @@ async fn main() -> anyhow::Result<()> {
     );
     let session_store = app_state.sessions.clone();
 
-    let awp_state = AwpState {
-        business_context: loader.context_ref(),
-        rate_limiter: awp.rate_limiter.clone(),
-        consent_service: Arc::new(InMemoryConsentService::new()),
-        event_service: event_service.clone(),
-        health: Arc::new(HealthStateMachine::new(event_service)),
-        trust_assigner: awp.trust_assigner.clone(),
-    };
+    // Known trust is verified by `JwtTrustAssigner`; the A2A dispatcher stays on
+    // `POST /awp/a2a` (routes::intent::a2a_intent), so adk-awp's own handler is unset.
+    let awp_state = AwpState::builder(loader.context_ref())
+        .rate_limiter(awp.rate_limiter.clone())
+        .consent_service(Arc::new(InMemoryConsentService::new()))
+        .event_service(event_service.clone())
+        .trust_assigner(awp.trust_assigner.clone())
+        .supported_trust_levels([TrustLevel::Anonymous, TrustLevel::Known])
+        .build();
 
     let api = Router::new()
         .route("/health", get(routes::health::health))

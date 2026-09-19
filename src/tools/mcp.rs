@@ -3,7 +3,7 @@
 use adk_core::Toolset;
 use adk_tool::mcp::{ConnectionFactory, McpToolset, RefreshConfig};
 use anyhow::Context;
-use rmcp::{service::RunningService, transport::TokioChildProcess, RoleClient, ServiceExt};
+use adk_tool::mcp::rmcp::{service::RunningService, transport::TokioChildProcess, RoleClient, ServiceExt};
 use std::path::Path;
 use std::sync::Arc;
 
