@@ -554,6 +554,8 @@
   .mode-badge { margin-left: 5px; font-size: 10px; opacity: .75; cursor: default; }
 
   /* ---------- Phase 2 surface: launchers + panels (Mother chat S10-T3, approvals S10-T4) ---------- */
+  /* explicit display values below would defeat the hidden attribute without this */
+  .p2-launch[hidden], .p2-panel[hidden], .p2-count[hidden], .p2-mini[hidden] { display: none !important; }
   .p2-launch { position: fixed; right: 18px; z-index: 55; width: 46px; height: 46px;
     border-radius: 50%; border: 1px solid var(--stroke); background: var(--glass); color: var(--ink);
     font-size: 18px; cursor: pointer; backdrop-filter: blur(18px); display: grid; place-items: center;
