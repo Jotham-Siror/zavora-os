@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'milestone/**']
+    branches: [main, 'milestone/**', 'phase2/**', 'docs/**']
   pull_request:
     branches: [main]
 
@@ -55,6 +55,7 @@ jobs:
           proactive_mock mcp_allowlist health_exposes
           postgres_schema ui_session_persists pg_agent_session
           domain_ intake_ mother_ ledger_ permission_ gate_ pending_ memory_ effects_
+          consent_ tasks_
 
       - name: cargo test (live — optional secrets)
         if: secrets.GOOGLE_API_KEY != ''
