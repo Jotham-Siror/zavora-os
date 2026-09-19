@@ -118,7 +118,20 @@ pub struct FanOut {
 
 /// Fan out all targets concurrently, then let each world fold its share into one structured
 /// result and append its own outcomes.
-pub async fn fan_out(state: &AppState, session_id: &str, user_id: &str, text: &str, targets: Vec<Target>) -> FanOut {
+pub async fn fan_out(state: &AppState, session_id: &str, user_id: &str, text: &str, targets: Vec<Target>, trace_id: &str) -> FanOut {
+    use crate::mother::bus::{global as bus, Address, AgentMessage, Kind};
+    for t in &targets {
+        let world_agent = match t.world { Domain::Work => "work_mother", Domain::Home => "home_mother", Domain::Shared => &t.agent };
+        let _ = bus().publish(
+            AgentMessage::new(trace_id, Address::mother(), Address::new(world_agent, t.world), Kind::Request, serde_json::json!({ "agent": t.agent, "task": t.task, "scenario": t.scenario }))
+                .permission("suggest", &[]),
+        );
+        if t.world != Domain::Shared {
+            let _ = bus().publish(
+                AgentMessage::new(trace_id, Address::new(world_agent, t.world), Address::new(&t.agent, t.world), Kind::Request, serde_json::json!({ "task": t.task, "scenario": t.scenario })).depth(2),
+            );
+        }
+    }
     let futures: Vec<_> = targets.iter().map(|t| run_target(state, session_id, user_id, text, t)).collect();
     let mut collected: Vec<(Vec<serde_json::Value>, bool)> = futures::future::join_all(futures).await;
     let mut targets = targets;
@@ -131,6 +144,7 @@ pub async fn fan_out(state: &AppState, session_id: &str, user_id: &str, text: &s
             targets.push(t);
             collected.push((events, false));
         }
+        let _ = bus().publish(AgentMessage::new(trace_id, Address::new("work_mother", Domain::Work), Address::mother(), Kind::Result, serde_json::to_value(&result).unwrap_or_default()));
         work_result = Some(result);
     }
     if home::enabled() && targets.iter().any(|t| t.world == Domain::Home) {
@@ -139,6 +153,7 @@ pub async fn fan_out(state: &AppState, session_id: &str, user_id: &str, text: &s
             targets.push(t);
             collected.push((events, false));
         }
+        let _ = bus().publish(AgentMessage::new(trace_id, Address::new("home_mother", Domain::Home), Address::mother(), Kind::Result, serde_json::to_value(&result).unwrap_or_default()));
         home_result = Some(result);
     }
 
