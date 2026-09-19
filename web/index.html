@@ -590,11 +590,33 @@
   .p2-inrow input:focus { border-color: rgba(124,92,255,.55); }
   .p2-send { width: 38px; height: 38px; flex: none; border-radius: 50%; border: none; cursor: pointer;
     background: linear-gradient(120deg, var(--accent-a), #5b7cff); color: #fff; font-size: 16px; }
+  /* approvals inbox (S10-T4) */
+  .appr-row { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-radius: 13px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--stroke); font-size: 12.5px; }
+  .appr-row.dom-work { border-left: 3px solid var(--dom-work); }
+  .appr-row.dom-home { border-left: 3px solid var(--dom-home); }
+  .appr-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+  .appr-meta .agent-chip { color: var(--ink); font-weight: 650; }
+  .effect-chip { padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 800; letter-spacing: .5px;
+    text-transform: uppercase; background: rgba(255,170,80,.16); border: 1px solid rgba(255,180,90,.4); color: #ffd9a8; }
+  .effect-chip.read, .effect-chip.write_local { background: rgba(37,208,192,.14); border-color: rgba(37,208,192,.35); color: #9ef0e6; }
+  .appr-sum { color: #e7ebff; line-height: 1.45; }
+  .appr-when { margin-left: auto; }
+  .appr-btns { display: flex; gap: 7px; }
+  .appr-btns .btn { padding: 7px 10px; font-size: 12px; flex: none; }
+  .appr-btns .btn.approve { flex: 1; }
+  .p2-toasts { position: fixed; right: 76px; bottom: 20px; z-index: 57; display: flex;
+    flex-direction: column-reverse; gap: 8px; pointer-events: none; align-items: flex-end; }
+  .p2-toast { padding: 10px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--stroke);
+    backdrop-filter: blur(18px); font-size: 12.5px; color: #e7ebff; max-width: 320px;
+    box-shadow: 0 16px 40px -18px rgba(0,0,0,.8); animation: rise .3s var(--spring); }
+
   @media (max-width: 640px) {
     .p2-launch { right: 12px; width: 42px; height: 42px; }
     .p2-launch.chat { bottom: 158px; }
     .p2-launch.appr { bottom: 208px; }
     .p2-panel { right: 12px; left: 12px; width: auto; bottom: 208px; max-height: 48vh; }
+    .p2-toasts { right: 62px; bottom: 160px; }
   }
 
   /* tiny phones */
@@ -704,7 +726,15 @@
 
   <div class="suzy" id="suzy"><div class="face" id="suzyFace">✦</div><div class="text" id="suzyText"></div></div>
 
-  <!-- Phase 2 surface (live mode only) — behaviour in /static/mother-chat.js -->
+  <!-- Phase 2 surface (live mode only) — behaviour in /static/mother-chat.js + /static/approvals.js -->
+  <div class="p2-toasts" id="p2Toasts" role="status" aria-live="polite"></div>
+  <button class="p2-launch appr" id="apprOpen" hidden title="Pending approvals" aria-label="Pending approvals">✓<span class="p2-count" id="apprCount" hidden></span></button>
+  <div class="p2-panel" id="apprPanel" hidden>
+    <div class="p2-head"><span>Pending approvals</span>
+      <button class="p2-mini" id="apprAll" hidden>Approve all</button>
+      <button class="p2-x" id="apprClose" aria-label="Close approvals">×</button></div>
+    <div class="p2-list" id="apprList"></div>
+  </div>
   <button class="p2-launch chat" id="chatOpen" hidden title="Chat with Suzy" aria-label="Chat with Suzy">✦</button>
   <div class="p2-panel" id="chatPanel" hidden>
     <div class="p2-head"><span>✦ Suzy — Mother Agent</span><button class="p2-x" id="chatClose" aria-label="Close chat">×</button></div>
@@ -2426,6 +2456,7 @@ submitIntent = function (text) {
 </script>
 <script src="/static/live-voice.js"></script>
 <script src="/static/field-client.js"></script>
+<script src="/static/approvals.js"></script>
 <script src="/static/mother-chat.js"></script>
 </body>
 </html>
