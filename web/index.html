@@ -1423,6 +1423,7 @@ const suzyFace = document.getElementById('suzyFace');
 
 function showSuzy(){
   const html = suzySummaries[currentKey];
+  if (!html) return;   // live scenarios outside the demo tour stream their own suzy_summary
   suzyText.innerHTML = html;
   suzy.classList.add('show');
   speak(suzyText.textContent);
