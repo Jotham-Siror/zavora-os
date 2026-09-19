@@ -13,6 +13,7 @@ use crate::domain::Domain;
 use crate::intelligence::ledger::{LedgerQuery, LedgerService};
 use crate::mother::intake::Target;
 use crate::permissions::Effect;
+use crate::worlds::{card, one_card_events, WorldResult};
 
 /// One Phase 2 work agent and how it is fulfilled today.
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -117,42 +118,6 @@ pub async fn unanswered_threads(ledger: &LedgerService, user_id: &str, min_age_d
 // S4-T1 · the Work Mother
 // ---------------------------------------------------------------------------
 
-/// Per-agent outcome inside a [`WorldResult`].
-#[derive(Clone, Debug, Serialize)]
-pub struct AgentOutcome {
-    pub agent: String,
-    pub scenario: String,
-    pub cards: usize,
-    pub resolved: usize,
-    pub timed_out: bool,
-}
-
-/// One structured result for the whole world — what the Mother receives back.
-#[derive(Clone, Debug, Serialize)]
-pub struct WorldResult {
-    pub world: Domain,
-    pub agents: Vec<AgentOutcome>,
-    pub follow_ups: Vec<FollowUp>,
-    pub stubs: Vec<&'static str>,
-    pub facts: Vec<String>,
-}
-
-fn count_events(events: &[serde_json::Value], kind: &str) -> usize {
-    events.iter().filter(|e| e.get("type").and_then(|t| t.as_str()) == Some(kind)).count()
-}
-
-fn card(title: &str, agent: &str, glyph: &str) -> serde_json::Value {
-    serde_json::json!({ "glyph": glyph, "title": title, "agent": agent, "domain": "work", "stream": ["Checking…"] })
-}
-
-fn one_card_events(c: serde_json::Value, resolve: serde_json::Value) -> Vec<serde_json::Value> {
-    vec![
-        serde_json::json!({"type": "scenario", "key": "work", "text": "", "total_cards": 1}),
-        serde_json::json!({"type": "card_spawn", "index": 0, "card": c, "domain": "work"}),
-        serde_json::json!({"type": "card_resolve", "index": 0, "resolve": resolve}),
-    ]
-}
-
 /// Fold the work targets' collected events into one [`WorldResult`] and produce the extra
 /// outcomes only the Work Mother can add (follow-ups card, labeled stubs). Returns the result and
 /// `(target, events)` pairs to append to the field.
@@ -162,40 +127,28 @@ pub async fn fold(
     targets: &[Target],
     collected: &[(Vec<serde_json::Value>, bool)],
 ) -> (WorldResult, Vec<(Target, Vec<serde_json::Value>)>) {
-    let mut result = WorldResult { world: Domain::Work, agents: Vec::new(), follow_ups: Vec::new(), stubs: Vec::new(), facts: Vec::new() };
+    let mut result = WorldResult::from_targets(Domain::Work, targets, collected);
     let mut extra = Vec::new();
-
-    for (t, (events, timed_out)) in targets.iter().zip(collected) {
-        if t.world != Domain::Work {
-            continue;
-        }
-        result.agents.push(AgentOutcome {
-            agent: t.agent.clone(),
-            scenario: t.scenario.clone(),
-            cards: count_events(events, "card_spawn"),
-            resolved: count_events(events, "card_resolve"),
-            timed_out: *timed_out,
-        });
-    }
     if result.agents.is_empty() {
         return (result, extra);
     }
 
     // S4-T4 — unanswered threads, from hashed subjects only.
-    result.follow_ups = unanswered_threads(ledger, user_id, FOLLOW_UP_DAYS).await;
-    if !result.follow_ups.is_empty() {
-        let n = result.follow_ups.len();
-        let oldest = result.follow_ups[0].age_days;
+    let follow_ups = unanswered_threads(ledger, user_id, FOLLOW_UP_DAYS).await;
+    if !follow_ups.is_empty() {
+        let n = follow_ups.len();
+        let oldest = follow_ups[0].age_days;
         result.facts.push(format!("{n} email thread{} unanswered for {FOLLOW_UP_DAYS}+ days (oldest {oldest} days)", if n == 1 { "" } else { "s" }));
         extra.push((
             Target { world: Domain::Work, agent: "email".into(), task: "unanswered threads".into(), scenario: "morning".into() },
             one_card_events(
-                card("Follow-ups", "inbox.agent", "↩️"),
+                card("Follow-ups", "inbox.agent", "↩️", Domain::Work),
                 serde_json::json!({
                     "big": format!("{n} unanswered"),
                     "sub": format!("read {FOLLOW_UP_DAYS}+ days ago, no reply yet · oldest {oldest} d"),
                     "actions": ["Draft replies", "Snooze"]
                 }),
+                Domain::Work,
             ),
         ));
     }
@@ -210,8 +163,9 @@ pub async fn fold(
         extra.push((
             Target { world: Domain::Work, agent: a.id.into(), task: a.mission.into(), scenario: "stub".into() },
             one_card_events(
-                card(title, &format!("{}.agent", a.id), glyph),
+                card(title, &format!("{}.agent", a.id), glyph, Domain::Work),
                 serde_json::json!({ "big": label, "sub": body, "actions": ["Learn more"] }),
+                Domain::Work,
             ),
         ));
     }

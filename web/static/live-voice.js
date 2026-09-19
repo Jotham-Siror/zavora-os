@@ -1,6 +1,8 @@
 /**
  * Gemini Live voice bridge — WS /ws/voice (mia pattern).
  * Falls back to prerecorded clips + SpeechRecognition when unavailable.
+ * Camera channel (M10-T5): with voice active, still frames go up the same socket about once a
+ * second and Suzy's `ui_gesture` tool call comes back as a `zavora:gesture` event (gestures.js).
  */
 (function () {
   'use strict';
@@ -17,6 +19,16 @@
   let processor = null;
   let sessionId = null;
   let onTranscript = null;
+
+  // Camera channel — frames are drawn to a small canvas and sent as JPEG; nothing is kept.
+  const FRAME_MS = 1000;
+  const FRAME_W = 320;
+  let cameraEnabled = false;
+  let cameraActive = false;
+  let camStream = null;
+  let videoEl = null;
+  let canvasEl = null;
+  let frameTimer = null;
 
   function wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -99,8 +111,28 @@
           sessionStorage.setItem('zavora_session_id', sessionId);
         } catch (_) {}
       }
+      if (msg.type === 'connected' && typeof msg.camera === 'boolean') {
+        cameraEnabled = enabled && msg.camera;
+      }
+      if (msg.type === 'tool_call' && msg.name === 'ui_gesture' && msg.arguments?.gesture) {
+        window.dispatchEvent(new CustomEvent('zavora:gesture', { detail: { gesture: msg.arguments.gesture } }));
+      }
+      if (msg.type === 'frame_rejected') {
+        console.warn('live camera: frame rejected —', msg.reason);
+        if (msg.reason === 'camera_off') stopCamera();
+      }
       if (msg.type === 'transcript' && msg.content && onTranscript) {
         onTranscript(msg.content);
+      }
+      if (msg.type === 'tool_call') {
+        // adk-realtime forwards tool arguments as the raw JSON string the model produced.
+        if (typeof msg.arguments === 'string') {
+          try {
+            msg.arguments = JSON.parse(msg.arguments);
+          } catch (_) {
+            msg.arguments = {};
+          }
+        }
       }
       if (msg.type === 'tool_call' && msg.name === 'submit_intent') {
         const sid = msg.arguments?.session_id || sessionId;
@@ -160,8 +192,59 @@
     });
   }
 
+  async function startCamera() {
+    if (!cameraEnabled || cameraActive || !active || !ws || ws.readyState !== WebSocket.OPEN) return false;
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 5, max: 10 }, facingMode: 'user' },
+      audio: false,
+    });
+    videoEl = document.createElement('video');
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.srcObject = camStream;
+    await videoEl.play();
+    canvasEl = document.createElement('canvas');
+    cameraActive = true;
+    frameTimer = setInterval(sendFrame, FRAME_MS);
+    return true;
+  }
+
+  function sendFrame() {
+    if (!cameraActive || !active || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const vw = videoEl.videoWidth;
+    const vh = videoEl.videoHeight;
+    if (!vw || !vh) return;
+    canvasEl.width = FRAME_W;
+    canvasEl.height = Math.max(1, Math.round((FRAME_W * vh) / vw));
+    canvasEl.getContext('2d').drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+    const url = canvasEl.toDataURL('image/jpeg', 0.6);
+    const data = url.slice(url.indexOf(',') + 1);
+    if (data) ws.send(JSON.stringify({ type: 'frame', mime: 'image/jpeg', data }));
+  }
+
+  function stopCamera() {
+    cameraActive = false;
+    if (frameTimer) {
+      clearInterval(frameTimer);
+      frameTimer = null;
+    }
+    if (videoEl) {
+      try {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      } catch (_) {}
+      videoEl = null;
+    }
+    canvasEl = null;
+    if (camStream) {
+      camStream.getTracks().forEach((t) => t.stop());
+      camStream = null;
+    }
+  }
+
   function stop() {
     active = false;
+    stopCamera();
     stopCapture();
     if (ws) {
       try {
@@ -185,9 +268,11 @@
       if (!res.ok) return false;
       const data = await res.json();
       enabled = !!data.enabled;
+      cameraEnabled = enabled && !!data.camera;
       return enabled;
     } catch (_) {
       enabled = false;
+      cameraEnabled = false;
       return false;
     }
   }
@@ -199,6 +284,10 @@
     speakText,
     isEnabled: () => enabled,
     isActive: () => active,
+    startCamera,
+    stopCamera,
+    isCameraEnabled: () => cameraEnabled,
+    isCameraActive: () => cameraActive,
   };
 
   probe();
