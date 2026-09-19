@@ -25,6 +25,10 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       DATABASE_URL: postgres://spatial_os:spatial_os@localhost:5434/spatial_os
+      # Exposed as env so the live-test step can test for it: the `secrets` context is not
+      # allowed in a step-level `if`, and that one line made GitHub reject the whole workflow
+      # (every run since M11 "failed" in 0 s with no jobs).
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,10 +62,8 @@ jobs:
           consent_ tasks_
 
       - name: cargo test (live — optional secrets)
-        if: secrets.GOOGLE_API_KEY != ''
+        if: env.GOOGLE_API_KEY != ''
         run: cargo test --test validate -- gemini_ router_agent suzy_agent mother_agent_builds
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
 
   docker:
     runs-on: ubuntu-latest
