@@ -28,6 +28,11 @@ and user-owned memory.
 - MCP servers are separate binaries built from the `mcp-servers` monorepo; paths are the
   `MCP_*_PATH` variables in `.env.example`. Postgres for local dev: `docker compose up -d`
   (port 5434); migrations run at boot via `sqlx::migrate!`.
+- **A shell-exported `GOOGLE_API_KEY` wins over `.env`.** dotenv never overrides a variable that
+  is already set, so a stale `export GOOGLE_API_KEY=…` in `~/.zshrc` makes the server and the
+  live tests use that key while `.env` says otherwise (symptom: `API key not valid` from Gemini
+  although `curl` with the `.env` key works). Run `unset GOOGLE_API_KEY` first, or pass
+  `GOOGLE_API_KEY=$(grep '^GOOGLE_API_KEY=' .env | cut -d= -f2) cargo run`.
 - **adk-rust drift.** adk-rust `main` moves fast. As of 2026-09-19 this repo's `main` does not
   compile against it (rmcp 3, `AwpState::builder`, rate-limiter signature). The fix is the first
   commit of PR #2 (`build: track adk-rust main`). If you hit type mismatches in `src/tools/mcp.rs`
