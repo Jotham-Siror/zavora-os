@@ -165,6 +165,7 @@ These tasks currently sit inside James's and Robert's tables. When the fifth per
 
 | Item | Owner | Due |
 |---|---|---|
+| Camera channel — Gemini Live sees and hears: frames over `/ws/voice`, `ui_gesture` → swipe worlds / pause / briefing, flag `ZAVORA_CAMERA`. Outside the S4–S12 plan; James to slot it (touches `routes/events.rs` kinds and the consent categories). | Kim | `phase2/camera-live-vision` |
 | ADR-005 tenancy: one deployment per person vs. multi-user with per-user MCP credentials and per-user scheduling. Today MCP children are spawned once at boot with operator-level OAuth, DND is one global flag, and each ambient agent runs one cron per process. | James | Sprint A, week 1 — **Proposed** in PR #6 (`docs/adr/005-…`), awaiting acceptance |
 | ADR-006 prerequisites: Phase 2 requires login + `DATABASE_URL`; define what the anonymous / in-memory path does (recommendation: demo only). Unify `user_id` type (existing `VARCHAR(255)` vs. `users.id UUID`). | James | Sprint A, week 1 — **Proposed** in PR #6 (`docs/adr/006-…`); `user_id` stays `TEXT` by decision |
 | Consent persistence: `InMemoryConsentService` still bound in `main.rs`. | James | Sprint A — done in PR #9 (`src/memory/consent.rs`, `GET/PUT /api/consents`) |

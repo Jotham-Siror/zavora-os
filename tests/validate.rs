@@ -358,6 +358,46 @@ fn voice_state_boots_when_api_key_present() {
     }
 }
 
+#[test]
+fn voice_state_camera_follows_voice_and_flag() {
+    use spatial_os::voice::camera::{instruction, Gesture, TOOL_NAME};
+
+    common::load_env();
+    let config = AppConfig::from_env().expect("config");
+    let voice = spatial_os::voice::VoiceState::boot(&config);
+    assert_eq!(voice.camera, voice.enabled && config.camera_enabled, "camera needs voice and ZAVORA_CAMERA");
+
+    // What the client relies on exists whether or not a key is configured.
+    assert!(spatial_os::routes::events::UI_KINDS.contains(&"ui_gesture"), "content-free gesture rows");
+    assert!(spatial_os::memory::consent::CATEGORIES.contains(&"camera"), "camera is a consent category");
+    assert_eq!(TOOL_NAME, "ui_gesture");
+    let text = instruction();
+    for g in Gesture::ALL {
+        assert!(text.contains(g.as_str()) && text.contains(g.effect()), "{}", g.as_str());
+    }
+}
+
+#[tokio::test]
+async fn voice_state_status_route_reports_camera() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    let state = offline_app_state();
+    let expected = state.voice.camera;
+    let app = axum::Router::new()
+        .route("/api/voice/status", axum::routing::get(spatial_os::routes::voice::status))
+        .with_state(state);
+    let response = app.oneshot(Request::get("/api/voice/status").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let json: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
+    assert_eq!(json["camera"], serde_json::Value::Bool(expected));
+    assert_eq!(json["ws_path"], "/ws/voice");
+    if !json["enabled"].as_bool().unwrap() {
+        assert_eq!(json["camera"], false, "no camera without voice");
+    }
+}
+
 fn awp_test_state() -> adk_awp::AwpState {
     use adk_awp::{
         AwpState, BusinessContextLoader, DefaultTrustAssigner, InMemoryConsentService,
@@ -1973,7 +2013,7 @@ async fn consent_routes_get_and_put_require_known_trust() {
 
     let res = send(Request::get(format!("/api/consents?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await;
     let body = read(res).await;
-    assert_eq!(body["categories"].as_array().unwrap().len(), 8);
+    assert_eq!(body["categories"].as_array().unwrap().len(), spatial_os::memory::consent::CATEGORIES.len());
     assert_eq!(body["persisted"], false);
     assert!(state.consents.has(&rec.user_id, "health", Domain::Home).await);
 
