@@ -54,7 +54,7 @@ The only hard cross-track dependency is that observations surface inside the bri
 
 | Team sprint | Dates | James | Kim | Robert | Jotham | Tag on completion |
 |---|---|---|---|---|---|---|
-| A | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.4.0-p2` |
+| A | TBD | 🟡 | ⬜ | ⬜ | ⬜ | `v1.4.0-p2` |
 | B | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.5.0-p2` |
 | C | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.6.0-p2` (R2) |
 | D | TBD | ⬜ | ⬜ | ⬜ | ⬜ | `v1.9.0-p2` (R3) |
@@ -81,7 +81,7 @@ Owns migrations, stores, routes, the SSE enum, the manifest and the allowlist fi
 
 | Team sprint | Plan tasks | What ships | Hand-off | Status |
 |---|---|---|---|---|
-| **A** | S0 follow-ups · S4-T3 · S11-T4 · S7-T1 migration | **ADR-005 tenancy** (one instance per person vs. multi-user with per-user MCP credentials and per-user scheduling) and **ADR-006 prerequisites** (Phase 2 requires login + Postgres; anonymous/in-memory path = demo only). Tasks migration 008 and task tools. Consent persistence pulled forward from S11 (replaces `InMemoryConsentService`). Migration 010 for Jotham. **Run and sign off the R1 validation script.** | Tenancy answer decides his own and Kim's sprint B | ⬜ |
+| **A** | S0 follow-ups · S4-T3 · S11-T4 · S7-T1 migration | **ADR-005 tenancy** (one instance per person vs. multi-user with per-user MCP credentials and per-user scheduling) and **ADR-006 prerequisites** (Phase 2 requires login + Postgres; anonymous/in-memory path = demo only). Tasks migration 008 and task tools. Consent persistence pulled forward from S11 (replaces `InMemoryConsentService`). Migration 010 for Jotham. **Run and sign off the R1 validation script.** | Tenancy answer decides his own and Kim's sprint B | 🟡 PR #6 (ADRs, CI) and PR #9 (tasks, consents, migration 010) open; R1 offline validation run on #9, dev-sign-in and live parts pending |
 | **B** | S5-T3 migration · S5-T6 · S5-T7 boot check · S5-T8 | Contacts migration 009. Separate work and home OAuth identities. Per-user credential injection into MCP children if ADR-005 says multi-tenant. Finance allowlist read-only boot check. HealthKit importer (moves to the fifth seat when filled). | Family agent to Kim | ⬜ |
 | **C** | S6-T6 route · S6-T7 · S8-T3 | Briefing route `GET /api/briefing/today`, `briefing` SSE event, briefing cron wiring. Boundaries migration 011 and `GET/PUT /api/boundaries`. **R2 sign-off.** | Briefing payload to Robert and Kim | ⬜ |
 | **D** | S9-T2 · S11-T5 · S7-T5 review | Knowledge migration 012. Retention policies 013 and nightly purge job. Review Jotham's `observation` event into `FieldEvent`. **R3 sign-off.** | Knowledge API to Robert | ⬜ |
@@ -165,12 +165,13 @@ These tasks currently sit inside James's and Robert's tables. When the fifth per
 
 | Item | Owner | Due |
 |---|---|---|
-| ADR-005 tenancy: one deployment per person vs. multi-user with per-user MCP credentials and per-user scheduling. Today MCP children are spawned once at boot with operator-level OAuth, DND is one global flag, and each ambient agent runs one cron per process. | James | Sprint A, week 1 |
-| ADR-006 prerequisites: Phase 2 requires login + `DATABASE_URL`; define what the anonymous / in-memory path does (recommendation: demo only). Unify `user_id` type (existing `VARCHAR(255)` vs. `users.id UUID`). | James | Sprint A, week 1 |
-| Consent persistence: `InMemoryConsentService` still bound in `main.rs`. | James | Sprint A |
+| ADR-005 tenancy: one deployment per person vs. multi-user with per-user MCP credentials and per-user scheduling. Today MCP children are spawned once at boot with operator-level OAuth, DND is one global flag, and each ambient agent runs one cron per process. | James | Sprint A, week 1 — **Proposed** in PR #6 (`docs/adr/005-…`), awaiting acceptance |
+| ADR-006 prerequisites: Phase 2 requires login + `DATABASE_URL`; define what the anonymous / in-memory path does (recommendation: demo only). Unify `user_id` type (existing `VARCHAR(255)` vs. `users.id UUID`). | James | Sprint A, week 1 — **Proposed** in PR #6 (`docs/adr/006-…`); `user_id` stays `TEXT` by decision |
+| Consent persistence: `InMemoryConsentService` still bound in `main.rs`. | James | Sprint A — done in PR #9 (`src/memory/consent.rs`, `GET/PUT /api/consents`) |
 | R1 validation script never run; S0–S3 marked "PO validation pending". | James (fifth seat when filled) | before Sprint A |
 | `docs/personal-ai-os.html` links to the fork branch instead of upstream `main`. | Kim | Sprint A |
-| CI triggers only on `main` and `milestone/**` pushes; add `phase2/**` and `docs/**`. | James | Sprint A |
+| CI triggers only on `main` and `milestone/**` pushes; add `phase2/**` and `docs/**`. | James | Sprint A — done in PR #6 |
+| `cargo run` stopped starting the server after R1 added `src/bin/load_ledger.rs` (README and CLAUDE.md still say `cargo run`). | James | Sprint A — fixed in PR #9 (`default-run`) |
 
 ---
 

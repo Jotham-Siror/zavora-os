@@ -6,7 +6,9 @@
 # Expects sibling directories: adk-rust/, spatial-os/
 # Optional: mount MCP server binaries at runtime (see deploy/docker-compose.yml).
 
-FROM rust:1.85-bookworm AS builder
+# adk-rust declares rust-version = "1.95" (rmcp 3, time 0.3.51 need ≥ 1.88); keep this in step
+# with the toolchain the team builds with.
+FROM rust:1.95-bookworm AS builder
 
 WORKDIR /build
 COPY adk-rust /build/adk-rust
