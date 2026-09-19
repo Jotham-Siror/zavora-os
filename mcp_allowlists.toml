@@ -141,6 +141,23 @@ find_free_time = "read"
 search_events = "read"
 list_calendars = "read"
 
+# Built-in tasks toolset (S4-T3) — served in-process, not an MCP child. Listing it here is
+# what attaches it to the agent (`gemini::filtered_for_agent`) and classifies its effects.
+[[allowlist]]
+agent = "calendar_agent"
+world = "work"
+mode = "suggest"
+mcp_server = "tasks"
+reason = "Productivity — tasks, deadlines, focus sessions, day plan"
+tools = ["create_task", "list_tasks", "postpone_task", "complete_task", "plan_day"]
+
+[allowlist.effects]
+create_task = "write_local"
+list_tasks = "read"
+postpone_task = "write_local"
+complete_task = "write_local"
+plan_day = "read"
+
 [[allowlist]]
 agent = "inbox_agent"
 world = "work"

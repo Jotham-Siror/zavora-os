@@ -33,6 +33,10 @@ pub async fn try_sync(config: &AppConfig, catalog: &AllowlistCatalog) -> anyhow:
     }
 
     for (mcp_server, entries) in &by_server {
+        if mcp_server == crate::tools::tasks::TOOLSET_ID {
+            // Built-in, in-process toolset (S4-T3) — nothing to register with the MCP registry.
+            continue;
+        }
         let Some(command) = mcp_command_for(config, mcp_server) else {
             tracing::warn!("mcp-registry sync: no path for server '{mcp_server}'");
             continue;

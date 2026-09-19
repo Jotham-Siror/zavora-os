@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use adk_awp::{
     handlers, middleware::version_negotiation, AwpState, BusinessContextLoader,
-    InMemoryConsentService, InMemoryEventSubscriptionService,
+    InMemoryEventSubscriptionService,
 };
 use awp_types::TrustLevel;
 use adk_runner::Runner;
@@ -94,6 +94,21 @@ async fn main() -> anyhow::Result<()> {
     );
     if spatial_os::memory::init(memory).is_err() {
         tracing::warn!("memory service was already initialized — keeping the existing instance");
+    }
+    // Consents (S11-T4, pulled forward): one store behind the AWP consent endpoints and the OS.
+    let consents = spatial_os::memory::consent::ConsentStore::new(pg_pool.clone());
+    if spatial_os::memory::consent::init(consents).is_err() {
+        tracing::warn!("consent store was already initialized — keeping the existing instance");
+    }
+    // Tasks (S4-T3): shared by Work Productivity and Home Personal Productivity.
+    let tasks = spatial_os::tools::tasks::TaskStore::new(pg_pool.clone());
+    if spatial_os::tools::tasks::init(tasks).is_err() {
+        tracing::warn!("task store was already initialized — keeping the existing instance");
+    }
+    if pg_pool.is_none() {
+        tracing::warn!(
+            "Phase 2 persistence disabled — demo/dev mode (ledger, permissions, memory, consents and tasks are in-memory; see ADR-006)"
+        );
     }
 
     let mut deck_runner = None;
@@ -335,7 +350,7 @@ async fn main() -> anyhow::Result<()> {
     // `POST /awp/a2a` (routes::intent::a2a_intent), so adk-awp's own handler is unset.
     let awp_state = AwpState::builder(loader.context_ref())
         .rate_limiter(awp.rate_limiter.clone())
-        .consent_service(Arc::new(InMemoryConsentService::new()))
+        .consent_service(Arc::new(spatial_os::memory::consent::handle().clone()))
         .event_service(event_service.clone())
         .trust_assigner(awp.trust_assigner.clone())
         .supported_trust_levels([TrustLevel::Anonymous, TrustLevel::Known])
@@ -405,6 +420,11 @@ async fn main() -> anyhow::Result<()> {
             "/api/memory",
             get(routes::memory::list).post(routes::memory::remember).delete(routes::memory::purge),
         )
+        .route(
+            "/api/consents",
+            get(routes::consents::get).put(routes::consents::put),
+        )
+        .route("/api/tasks", get(routes::tasks::list))
         .route("/api/memory/export", get(routes::memory::export))
         .route(
             "/api/memory/{id}",

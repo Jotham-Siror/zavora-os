@@ -1866,3 +1866,434 @@ fn business_toml_lists_r1_capabilities() {
         assert!(known.contains(&cap), "{cap} must require known trust");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 · team sprint A (Platform) — consents (S11-T4 pulled forward) and tasks (S4-T3)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn consent_store_grants_checks_and_revokes_per_world() {
+    use adk_awp::ConsentService;
+    use spatial_os::domain::Domain;
+    use spatial_os::memory::consent::ConsentStore;
+
+    let store = ConsentStore::in_memory();
+    let u = "u-consent";
+    let first = store.grant(u, "email", Domain::Work, "read and draft replies").await.expect("valid category");
+    let again = store.grant(u, "email", Domain::Work, "duplicate").await.unwrap();
+    assert_eq!(first.id, again.id, "granting twice is idempotent");
+    assert!(store.has(u, "email", Domain::Work).await);
+    assert!(!store.has(u, "email", Domain::Home).await, "a work grant does not cover home");
+    assert!(store.has(u, "email", Domain::Shared).await, "a cross-world check accepts any active grant");
+    store.grant(u, "calendar", Domain::Shared, "scheduling").await.unwrap();
+    assert!(store.has(u, "calendar", Domain::Home).await, "a shared grant covers both worlds");
+    assert_eq!(store.revoke(u, "email", None).await, 1);
+    assert!(!store.has(u, "email", Domain::Work).await);
+    assert_eq!(store.list(u).await.len(), 2, "history keeps revoked grants");
+    assert_eq!(store.active(u).await.len(), 1);
+    assert!(store.grant(u, "Not Valid!", Domain::Shared, "x").await.is_none());
+
+    // adk-awp view of the same store: subject = user, purpose = category.
+    store.capture_consent("awp-subject", "reading").await.unwrap();
+    assert!(store.check_consent("awp-subject", "reading").await.unwrap());
+    store.revoke_consent("awp-subject", "reading").await.unwrap();
+    assert!(!store.check_consent("awp-subject", "reading").await.unwrap());
+    assert!(store.capture_consent("awp-subject", "bad purpose!").await.is_err());
+}
+
+#[tokio::test]
+async fn consent_routes_get_and_put_require_known_trust() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::domain::Domain;
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-consent-routes".into()).await;
+    let app = axum::Router::new()
+        .route(
+            "/api/consents",
+            axum::routing::get(spatial_os::routes::consents::get).put(spatial_os::routes::consents::put),
+        )
+        .with_state(state.clone());
+    let send = |req: Request<Body>| {
+        let app = app.clone();
+        let headers = headers.clone();
+        async move {
+            let mut req = req;
+            req.headers_mut().extend(headers);
+            app.oneshot(req).await.unwrap()
+        }
+    };
+    let json = |body: serde_json::Value| Body::from(body.to_string());
+    let read = |res: axum::response::Response| async move {
+        serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap()
+    };
+
+    let anon = app
+        .clone()
+        .oneshot(Request::get(format!("/api/consents?session_id={}", rec.session_id)).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), StatusCode::FORBIDDEN);
+
+    let res = send(
+        Request::put("/api/consents")
+            .header("content-type", "application/json")
+            .body(json(serde_json::json!({
+                "session_id": rec.session_id, "category": "health", "world": "home",
+                "purpose": "sleep and exercise facts for the wellbeing section", "granted": true
+            })))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = read(res).await;
+    assert_eq!(body["consents"].as_array().unwrap().len(), 1);
+    assert_eq!(body["consents"][0]["world"], "home");
+    assert!(body["consents"][0]["revoked_at"].is_null());
+
+    let res = send(
+        Request::put("/api/consents")
+            .header("content-type", "application/json")
+            .body(json(serde_json::json!({"session_id": rec.session_id, "category": "telepathy", "granted": true, "purpose": "x"})))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST, "unknown category");
+    let res = send(
+        Request::put("/api/consents")
+            .header("content-type", "application/json")
+            .body(json(serde_json::json!({"session_id": rec.session_id, "category": "finance", "granted": true})))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST, "granting needs a purpose");
+
+    let res = send(Request::get(format!("/api/consents?session_id={}", rec.session_id)).body(Body::empty()).unwrap()).await;
+    let body = read(res).await;
+    assert_eq!(body["categories"].as_array().unwrap().len(), 8);
+    assert_eq!(body["persisted"], false);
+    assert!(state.consents.has(&rec.user_id, "health", Domain::Home).await);
+
+    let res = send(
+        Request::put("/api/consents")
+            .header("content-type", "application/json")
+            .body(json(serde_json::json!({"session_id": rec.session_id, "category": "health", "granted": false})))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(!state.consents.has(&rec.user_id, "health", Domain::Home).await);
+    assert!(read(res).await["consents"][0]["revoked_at"].is_string());
+}
+
+/// Needs `DATABASE_URL` (CI service container or `docker compose up -d`).
+#[tokio::test]
+async fn consent_pg_roundtrip_persists_grant_and_revocation() {
+    use spatial_os::domain::Domain;
+    use spatial_os::memory::consent::ConsentStore;
+
+    let pool = common::postgres_pool().await;
+    sqlx::migrate!("./migrations").run(&pool).await.expect("migrations apply");
+    let user = format!("u-consent-pg-{}", uuid::Uuid::new_v4());
+
+    let store = ConsentStore::new(Some(pool.clone()));
+    let granted = store.grant(&user, "finance", Domain::Home, "read-only budgets").await.unwrap();
+
+    let fresh = ConsentStore::new(Some(pool.clone()));
+    assert!(fresh.has(&user, "finance", Domain::Home).await, "grant survives a new store instance");
+    assert_eq!(fresh.revoke(&user, "finance", Some(Domain::Home)).await, 1);
+
+    let third = ConsentStore::new(Some(pool.clone()));
+    assert!(!third.has(&user, "finance", Domain::Home).await, "revocation survives too");
+    let all = third.list(&user).await;
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].id, granted.id);
+    assert!(all[0].revoked_at.is_some());
+
+    assert_eq!(third.purge(&user).await, 1);
+    assert!(ConsentStore::new(Some(pool)).list(&user).await.is_empty());
+}
+
+#[tokio::test]
+async fn tasks_store_creates_postpones_completes_and_ledgers() {
+    use spatial_os::domain::Domain;
+    use spatial_os::intelligence::LedgerQuery;
+    use spatial_os::permissions::gate;
+    use spatial_os::tools::tasks::{NewTask, Priority, TaskFilter, TaskKind, TaskStatus, TaskStore};
+
+    let store = TaskStore::in_memory();
+    let u = "u-tasks-store";
+    let due = chrono::Utc::now() + chrono::Duration::days(2);
+    let t = store
+        .create(
+            u,
+            NewTask {
+                domain: Domain::Work,
+                title: "Finish board memo",
+                kind: TaskKind::Deadline,
+                due: Some(due),
+                duration_minutes: None,
+                priority: Priority::High,
+                source_agent: "calendar_agent",
+                notes: Some("for Friday's board meeting"),
+            },
+        )
+        .await;
+    assert_eq!(t.status, TaskStatus::Open);
+    assert_eq!(t.postponed_count, 0);
+
+    let p = store.postpone(u, t.id, None, "calendar_agent").await.expect("open task");
+    assert_eq!(p.postponed_count, 1);
+    assert_eq!(p.due, Some(due + chrono::Duration::days(1)), "default postpone is one day");
+
+    let done = store.complete(u, t.id, "calendar_agent").await.expect("open task");
+    assert_eq!(done.status, TaskStatus::Done);
+    assert!(done.completed_at.is_some());
+    assert!(store.postpone(u, t.id, None, "calendar_agent").await.is_none(), "done tasks cannot be postponed");
+    assert!(store.list(u, Domain::Shared, &TaskFilter { status: Some(TaskStatus::Open), ..Default::default() }).await.is_empty());
+    assert_eq!(store.list(u, Domain::Shared, &TaskFilter::default()).await.len(), 1);
+
+    // The ledger saw three content-free events with the task id hashed — never the title.
+    let svc = gate::services();
+    svc.ledger.flush().await;
+    tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+    let events = svc
+        .ledger
+        .query(&LedgerQuery { user_id: u.into(), agent_id: Some("calendar_agent".into()), ..Default::default() })
+        .await;
+    let kinds: Vec<&str> = events.iter().map(|e| e.kind.as_str()).collect();
+    for k in ["task_created", "task_postponed", "task_completed"] {
+        assert!(kinds.contains(&k), "missing ledger kind {k} in {kinds:?}");
+    }
+    let postponed = events.iter().find(|e| e.kind == "task_postponed").unwrap();
+    assert_eq!(postponed.meta["postponed_count"], 1);
+    assert_eq!(postponed.meta["kind"], "deadline");
+    assert_eq!(postponed.subject_hash.as_ref().map(String::len), Some(24));
+    let dump = serde_json::to_string(&events).unwrap();
+    assert!(!dump.contains("board memo") && !dump.contains("Friday"), "ledger must stay content-free");
+}
+
+#[tokio::test]
+async fn tasks_tools_pass_through_the_permission_gate() {
+    let _serial = gate_lock().lock().await;
+    use spatial_os::permissions::{gate, Mode};
+
+    let svc = gate::services();
+    let user = adk_tool::SimpleToolContext::new("x").user_id().to_string();
+    let gated = spatial_os::permissions::PermissionGate::wrap(
+        "calendar_agent",
+        spatial_os::tools::tasks::TasksTools::for_agent("calendar_agent"),
+    );
+    let ctx: Arc<dyn adk_core::ReadonlyContext> = Arc::new(adk_tool::SimpleToolContext::new("test"));
+    let tools: std::collections::HashMap<String, Arc<dyn adk_core::Tool>> =
+        gated.tools(ctx).await.unwrap().into_iter().map(|t| (t.name().to_string(), t)).collect();
+    assert_eq!(tools.len(), 5);
+    for name in spatial_os::tools::tasks::TOOL_NAMES {
+        assert!(tools.contains_key(name), "missing tool {name}");
+    }
+    assert!(tools["list_tasks"].is_read_only());
+    assert!(tools["plan_day"].is_read_only());
+    assert!(!tools["create_task"].is_read_only());
+
+    svc.permissions.set_mode(&user, "calendar_agent", Mode::Observe).await;
+    let denied = tools["create_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"title": "Renew passport"})).await.unwrap();
+    assert_eq!(denied["status"], "denied");
+    let listed = tools["list_tasks"].execute(tool_ctx("s-tasks"), serde_json::json!({})).await.unwrap();
+    assert_eq!(listed["scope"], "work", "reads still work in observe mode");
+
+    svc.permissions.set_mode(&user, "calendar_agent", Mode::Suggest).await;
+    let created = tools["create_task"]
+        .execute(tool_ctx("s-tasks"), serde_json::json!({"title": "Renew passport", "due": "tomorrow", "priority": "high", "kind": "errand"}))
+        .await
+        .unwrap();
+    assert_eq!(created["status"], "created", "{created}");
+    assert_eq!(created["task"]["domain"], "work", "calendar_agent lives in the work world");
+    assert_eq!(created["task"]["kind"], "errand");
+    let id = created["task"]["id"].as_str().unwrap().to_string();
+
+    let home = tools["create_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"title": "Dentist", "domain": "home"})).await.unwrap();
+    assert_eq!(home["status"], "rejected", "a work agent cannot write home tasks");
+    let bad_due = tools["create_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"title": "x", "due": "next week"})).await.unwrap();
+    assert_eq!(bad_due["status"], "rejected");
+
+    let listed = tools["list_tasks"].execute(tool_ctx("s-tasks"), serde_json::json!({})).await.unwrap();
+    assert!(listed["tasks"].as_array().unwrap().iter().any(|t| t["id"] == id));
+
+    let postponed = tools["postpone_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"task_id": id, "due": "2030-01-05"})).await.unwrap();
+    assert_eq!(postponed["status"], "postponed", "{postponed}");
+    assert_eq!(postponed["task"]["postponed_count"], 1);
+    assert_eq!(postponed["task"]["due"], "2030-01-05T23:59:59Z");
+
+    let plan = tools["plan_day"].execute(tool_ctx("s-tasks"), serde_json::json!({})).await.unwrap();
+    assert_eq!(plan["status"], "ok");
+    assert!(plan["plan"]["date"].is_string());
+    assert!(plan["plan"]["open_total"].as_u64().unwrap() >= 1);
+    let outside = tools["plan_day"].execute(tool_ctx("s-tasks"), serde_json::json!({"domain": "home"})).await.unwrap();
+    assert_eq!(outside["status"], "rejected");
+
+    let completed = tools["complete_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"task_id": id})).await.unwrap();
+    assert_eq!(completed["status"], "completed");
+    assert_eq!(completed["task"]["status"], "done");
+    let missing = tools["complete_task"].execute(tool_ctx("s-tasks"), serde_json::json!({"task_id": uuid::Uuid::new_v4()})).await.unwrap();
+    assert_eq!(missing["status"], "rejected");
+
+    // Audit shows the write_local decisions; the anonymous gate user gets a clean mode back.
+    let allowed = svc
+        .audit
+        .list(&user, 200)
+        .await
+        .into_iter()
+        .filter(|e| e.tool == "create_task" && e.decision == "allowed")
+        .count();
+    assert!(allowed >= 1);
+    let denied_count = svc.audit.list(&user, 200).await.into_iter().filter(|e| e.tool == "create_task" && e.decision == "denied").count();
+    assert!(denied_count >= 1);
+}
+
+#[tokio::test]
+async fn tasks_toolset_is_attached_only_to_agents_that_allowlist_it() {
+    let inner: Arc<dyn adk_core::Toolset> = Arc::new(FakeInboxTools);
+    let ctx: Arc<dyn adk_core::ReadonlyContext> = Arc::new(adk_tool::SimpleToolContext::new("t"));
+
+    let calendar = spatial_os::agents::gemini::filtered_for_agent("calendar_agent", inner.clone());
+    let names: Vec<String> = calendar.tools(ctx.clone()).await.unwrap().iter().map(|t| t.name().to_string()).collect();
+    assert!(names.contains(&"create_task".to_string()), "{names:?}");
+    assert!(names.contains(&"plan_day".to_string()));
+    assert!(names.contains(&"read_memory".to_string()), "memory tools still attached");
+    assert!(!names.contains(&"send_anything".to_string()), "the MCP allowlist still filters");
+
+    let inbox = spatial_os::agents::gemini::filtered_for_agent("inbox_agent", inner);
+    let names: Vec<String> = inbox.tools(ctx).await.unwrap().iter().map(|t| t.name().to_string()).collect();
+    assert!(!names.contains(&"create_task".to_string()), "inbox_agent has no tasks entry: {names:?}");
+    assert!(names.contains(&"create_draft".to_string()));
+}
+
+#[tokio::test]
+async fn tasks_route_lists_open_tasks_for_known_user() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::domain::Domain;
+    use spatial_os::tools::tasks::{NewTask, Priority, TaskKind};
+    use tower::ServiceExt;
+
+    let (state, headers) = known_app_state();
+    let rec = state.sessions.create_for_user("u-tasks-routes".into()).await;
+    let work = state
+        .tasks
+        .create(
+            &rec.user_id,
+            NewTask { domain: Domain::Work, title: "Board memo", kind: TaskKind::Deadline, due: None, duration_minutes: None, priority: Priority::High, source_agent: "test", notes: None },
+        )
+        .await;
+    state
+        .tasks
+        .create(
+            &rec.user_id,
+            NewTask { domain: Domain::Home, title: "Passport", kind: TaskKind::Errand, due: None, duration_minutes: None, priority: Priority::Normal, source_agent: "test", notes: None },
+        )
+        .await;
+    state.tasks.complete(&rec.user_id, work.id, "test").await.unwrap();
+
+    let app = axum::Router::new()
+        .route("/api/tasks", axum::routing::get(spatial_os::routes::tasks::list))
+        .with_state(state.clone());
+    let anon = app
+        .clone()
+        .oneshot(Request::get(format!("/api/tasks?session_id={}", rec.session_id)).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(anon.status(), StatusCode::FORBIDDEN);
+
+    let get = |path: String| {
+        let app = app.clone();
+        let headers = headers.clone();
+        async move {
+            let mut req = Request::get(path).body(Body::empty()).unwrap();
+            req.headers_mut().extend(headers);
+            let res = app.oneshot(req).await.unwrap();
+            assert_eq!(res.status(), StatusCode::OK);
+            serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap()
+        }
+    };
+    let open = get(format!("/api/tasks?session_id={}", rec.session_id)).await;
+    assert_eq!(open["count"], 1);
+    assert_eq!(open["tasks"][0]["title"], "Passport");
+    assert_eq!(open["persisted"], false);
+    let all = get(format!("/api/tasks?session_id={}&status=all", rec.session_id)).await;
+    assert_eq!(all["count"], 2);
+    let work_only = get(format!("/api/tasks?session_id={}&status=all&domain=work", rec.session_id)).await;
+    assert_eq!(work_only["count"], 1);
+    assert_eq!(work_only["tasks"][0]["status"], "done");
+}
+
+#[test]
+fn tasks_allowlist_declares_builtin_toolset_with_effects() {
+    use spatial_os::permissions::Effect;
+    use spatial_os::tools::allowlist::AllowlistCatalog;
+    use spatial_os::tools::tasks::{TOOLSET_ID, TOOL_NAMES};
+
+    let path = common::manifest_dir().join("mcp_allowlists.toml");
+    let catalog = AllowlistCatalog::from_file(&path).expect("catalog");
+    let spec = catalog.spec_for("calendar_agent").expect("calendar_agent spec");
+    assert!(spec.mcp_servers.iter().any(|m| m == TOOLSET_ID));
+    for tool in TOOL_NAMES {
+        assert!(catalog.effect_for("calendar_agent", tool).is_some(), "{tool} needs an effect");
+    }
+    assert_eq!(catalog.effect_for("calendar_agent", "create_task"), Some(Effect::WriteLocal));
+    assert_eq!(catalog.effect_for("calendar_agent", "postpone_task"), Some(Effect::WriteLocal));
+    assert_eq!(catalog.effect_for("calendar_agent", "complete_task"), Some(Effect::WriteLocal));
+    assert_eq!(catalog.effect_for("calendar_agent", "list_tasks"), Some(Effect::Read));
+    assert_eq!(catalog.effect_for("calendar_agent", "plan_day"), Some(Effect::Read));
+    assert!(catalog.validate_effects(true).expect("classified").is_empty());
+}
+
+#[test]
+fn tasks_and_consents_capabilities_require_known_trust() {
+    use adk_awp::BusinessContextLoader;
+    let path = common::manifest_dir().join("business.toml");
+    let ctx = BusinessContextLoader::from_file(&path).expect("business.toml").load();
+    for cap in ["list_tasks", "manage_consents"] {
+        let c = ctx.capabilities.iter().find(|c| c.name == cap).unwrap_or_else(|| panic!("missing capability {cap}"));
+        assert_eq!(c.access_level, awp_types::TrustLevel::Known, "{cap} must require known trust");
+    }
+}
+
+/// Needs `DATABASE_URL` (CI service container or `docker compose up -d`).
+#[tokio::test]
+async fn tasks_pg_roundtrip_and_sprint_a_migrations() {
+    use spatial_os::domain::Domain;
+    use spatial_os::tools::tasks::{NewTask, Priority, TaskKind, TaskStore};
+
+    let pool = common::postgres_pool().await;
+    sqlx::migrate!("./migrations").run(&pool).await.expect("migrations apply");
+
+    let tables: Vec<(String,)> =
+        sqlx::query_as("SELECT tablename::text FROM pg_tables WHERE schemaname = 'public'").fetch_all(&pool).await.expect("tables");
+    let names: Vec<&str> = tables.iter().map(|(t,)| t.as_str()).collect();
+    for expected in ["tasks", "consents", "activity_daily", "baselines", "observations"] {
+        assert!(names.contains(&expected), "missing table {expected}, got {names:?}");
+    }
+
+    let user = format!("u-tasks-pg-{}", uuid::Uuid::new_v4());
+    let store = TaskStore::new(Some(pool.clone()));
+    let t = store
+        .create(
+            &user,
+            NewTask { domain: Domain::Home, title: "Book dentist", kind: TaskKind::Errand, due: None, duration_minutes: None, priority: Priority::Normal, source_agent: "test", notes: Some("ask about Saturday slots") },
+        )
+        .await;
+    store.postpone(&user, t.id, None, "test").await.expect("open");
+
+    let fresh = TaskStore::new(Some(pool.clone()));
+    let got = fresh.get(&user, t.id).await.expect("persisted task");
+    assert_eq!(got.postponed_count, 1);
+    assert_eq!(got.domain, Domain::Home);
+    assert_eq!(got.kind, TaskKind::Errand);
+    assert!(got.due.is_some(), "postponing an undated task gives it a due date");
+    assert_eq!(got.notes.as_deref(), Some("ask about Saturday slots"));
+
+    assert_eq!(fresh.purge(&user).await, 1);
+    assert!(TaskStore::new(Some(pool)).get(&user, t.id).await.is_none());
+}

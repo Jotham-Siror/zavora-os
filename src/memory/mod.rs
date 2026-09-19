@@ -5,11 +5,13 @@
 //!   sensitive values ([`crypto`]).
 //! - [`tools`]: `read_memory` / `propose_memory` for agents, scoped by world.
 //! - [`chat`]: "remember …", "forget …", "why do you think …" handled before intake.
+//! - [`consent`]: persisted consents per category and world (S11-T4, pulled forward).
 //!
 //! Like the permission services, the memory service is installed process-wide at boot so
 //! agents built before `AppState` exists can reach it.
 
 pub mod chat;
+pub mod consent;
 pub mod crypto;
 pub mod service;
 pub mod tools;
