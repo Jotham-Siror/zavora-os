@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zavora Personal AI OS — Concept & Sprint Plan</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg0: #070a12; --bg1: #0b1020;
+    --surface: #111827; --surface-2: #161f33; --surface-3: #1c2740;
+    --ink: #eef2ff; --ink-2: #c3cae6; --muted: #8b95b8;
+    --grid: #232c44; --axis: #2f3a57; --border: rgba(150,170,255,.14);
+    --accent: #7c5cff; --accent-b: #25d0c0;
+    /* categorical slots (validated, dark) — fixed assignment, never cycled */
+    --work: #3987e5;      /* slot 1 blue   → Work World, Release R1 */
+    --home: #d95926;      /* slot 2 orange → Home World, Release R2 */
+    --intel: #199e70;     /* slot 3 aqua   → Intelligence, Release R3 */
+    --trust: #c98500;     /* slot 4 yellow → Trust/Command center, Release R4 */
+    --shared: #9085e9;    /* slot 7 violet → shared / Mother */
+    /* status (reserved; always with icon + label) */
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; font-family: var(--font); color: var(--ink);
+    background: radial-gradient(120% 100% at 50% 0%, var(--bg1), var(--bg0) 60%);
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-b); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em;
+    background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 6px; }
+  pre { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; overflow: auto; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ---------- layout ---------- */
+  .app { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100vh; }
+  nav.side {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 22px 14px;
+    border-right: 1px solid var(--border); background: rgba(7,10,18,.65); backdrop-filter: blur(14px);
+  }
+  nav.side .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; }
+  nav.side .brand .dot { width: 10px; height: 10px; border-radius: 50%;
+    background: linear-gradient(120deg, var(--accent), var(--accent-b)); box-shadow: 0 0 14px var(--accent); }
+  nav.side .brand b { font-size: 13.5px; letter-spacing: .2px; }
+  nav.side .brand small { display: block; color: var(--muted); font-size: 11px; }
+  nav.side h4 { margin: 14px 8px 6px; font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  nav.side a { display: block; padding: 7px 10px; border-radius: 9px; color: var(--ink-2); font-size: 13px; }
+  nav.side a:hover { background: rgba(255,255,255,.05); text-decoration: none; color: var(--ink); }
+  nav.side a.active { background: rgba(124,92,255,.16); color: #fff; }
+  nav.side a .n { display: inline-block; width: 22px; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+  main { padding: 28px 44px 80px; max-width: 1180px; }
+  section { scroll-margin-top: 20px; padding: 26px 0 10px; border-top: 1px solid var(--border); }
+  section:first-of-type { border-top: 0; padding-top: 0; }
+  .eyebrow { font-size: 11px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  h1 { font-size: 34px; letter-spacing: -.6px; margin: 6px 0 8px; line-height: 1.15; }
+  h2 { font-size: 24px; letter-spacing: -.3px; margin: 4px 0 6px; }
+  h3 { font-size: 16px; margin: 22px 0 8px; }
+  h2 .n { color: var(--muted); font-weight: 500; margin-right: 8px; }
+  p.lead { font-size: 16px; color: var(--ink-2); max-width: 78ch; }
+  p, li { color: var(--ink-2); }
+  p { max-width: 82ch; }
+  .muted { color: var(--muted); }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .g3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .g4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px;
+    box-shadow: 0 20px 50px -30px rgba(0,0,0,.7);
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; }
+  .card p { margin: 0; font-size: 13.5px; }
+  .card .glyph { font-size: 20px; margin-bottom: 6px; }
+  .rail { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
+    font-size: 11.5px; border: 1px solid var(--border); color: var(--ink-2); background: rgba(255,255,255,.03); white-space: nowrap; }
+  .tag .sw { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+  .tag.work .sw { background: var(--work); } .tag.home .sw { background: var(--home); }
+  .tag.intel .sw { background: var(--intel); } .tag.trust .sw { background: var(--trust); }
+  .tag.shared .sw { background: var(--shared); }
+  .mode { font-weight: 600; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 6px; }
+  .kpi .tile { flex: 1 1 150px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .kpi .tile .label { font-size: 12px; color: var(--muted); }
+  .kpi .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -.5px; margin-top: 2px; }
+  .kpi .tile .sub { font-size: 11.5px; color: var(--muted); }
+  .principle { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .principle:last-child { border-bottom: 0; }
+  .principle .num { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+    background: rgba(124,92,255,.18); color: #cdc4ff; }
+  .principle b { color: var(--ink); }
+  .principle span { font-size: 13.5px; color: var(--ink-2); }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th { text-align: left; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--axis); }
+  table.t td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; color: var(--ink-2); }
+  table.t td:first-child { color: var(--ink); font-weight: 600; }
+  table.t tr:hover td { background: rgba(255,255,255,.025); }
+  .num { font-variant-numeric: tabular-nums; }
+  .quote { border-left: 3px solid var(--accent); padding: 8px 14px; margin: 12px 0; color: var(--ink); background: rgba(124,92,255,.08); border-radius: 0 10px 10px 0; font-size: 14px; }
+  .callout { border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; background: rgba(37,208,192,.06); font-size: 13.5px; }
+  .callout b { color: var(--ink); }
+  .split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; align-items: start; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+  .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--ink-2); font-size: 12.5px; cursor: pointer; font: inherit; }
+  .chip:hover { background: rgba(255,255,255,.07); }
+  .chip[aria-pressed="true"] { background: rgba(124,92,255,.22); color: #fff; border-color: rgba(124,92,255,.5); }
+  .btn { padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,.09); }
+  .btn.primary { background: linear-gradient(120deg, rgba(124,92,255,.85), rgba(37,208,192,.7)); border-color: transparent; }
+  .footer-links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 8px; }
+
+  /* ---------- architecture diagram ---------- */
+  .arch { display: grid; gap: 10px; }
+  .layer { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: stretch; }
+  .layer .name { display: flex; flex-direction: column; justify-content: center; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); font-weight: 700; padding-left: 4px; }
+  .layer .name small { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .nodes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .node { flex: 1 1 120px; min-width: 120px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); cursor: pointer;
+    text-align: left; font: inherit; color: var(--ink); transition: transform .15s ease, background .15s ease; position: relative; }
+  .node:hover { background: var(--surface-2); transform: translateY(-1px); }
+  .node[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .node .t { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .node .s { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .node .sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .node.work .sw { background: var(--work); } .node.home .sw { background: var(--home); }
+  .node.intel .sw { background: var(--intel); } .node.trust .sw { background: var(--trust); } .node.shared .sw { background: var(--shared); }
+  .node.mother { flex: 1 1 100%; background: linear-gradient(120deg, rgba(124,92,255,.22), rgba(37,208,192,.12)); border-color: rgba(124,92,255,.4); }
+  .node.mother .t { font-size: 15px; }
+  .connector { height: 14px; display: flex; justify-content: center; }
+  .connector::before { content: ""; width: 1px; background: var(--axis); }
+  .detail { margin-top: 12px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); min-height: 84px; font-size: 13.5px; }
+  .detail b { color: var(--ink); }
+  .detail .rail { margin-top: 8px; }
+
+  /* ---------- pipeline (mother) ---------- */
+  .pipe { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; }
+  .step { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; position: relative; }
+  .step .k { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .step b { display: block; margin: 4px 0 4px; font-size: 13.5px; }
+  .step p { font-size: 12px; margin: 0; }
+  .step::after { content: "→"; position: absolute; right: -11px; top: 12px; color: var(--muted); font-size: 13px; }
+  .step:last-child::after { content: none; }
+
+  /* ---------- agent catalog ---------- */
+  .agent { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; }
+  .agent .g { font-size: 20px; line-height: 1; padding-top: 2px; }
+  .agent h4 { display: flex; align-items: center; gap: 8px; }
+  .agent .meta { font-size: 11.5px; color: var(--muted); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .status { font-size: 11px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--ink-2); }
+
+  /* ---------- charts ---------- */
+  .viz { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px 12px; }
+  .viz .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .viz h4 { margin: 0; font-size: 14px; }
+  .viz .sub { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
+  .legend i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  svg.chart text { font-family: var(--font); fill: var(--ink-2); }
+  svg.chart .grid { stroke: var(--grid); stroke-width: 1; }
+  svg.chart .axis { stroke: var(--axis); stroke-width: 1; }
+  svg.chart .tick { font-size: 11px; fill: var(--muted); }
+  svg.chart .lab { font-size: 11.5px; fill: var(--ink-2); }
+  svg.chart .val { font-size: 11.5px; fill: var(--ink); font-weight: 600; }
+  svg.chart rect.bar { cursor: pointer; }
+  svg.chart rect.bar:hover, svg.chart rect.bar:focus { filter: brightness(1.18); outline: none; }
+  .tip { position: fixed; pointer-events: none; z-index: 50; background: #0d1326; border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px; font-size: 12px; color: var(--ink-2); box-shadow: 0 12px 30px -10px rgba(0,0,0,.8); display: none; min-width: 140px; }
+  .tip b { color: var(--ink); font-size: 13px; }
+  .tip .row { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .tip .key { width: 12px; height: 2px; display: inline-block; border-radius: 1px; }
+  .tablewrap { display: none; margin-top: 10px; }
+  .tablewrap.open { display: block; }
+
+  /* ---------- timeline ---------- */
+  .tl { overflow-x: auto; }
+  .tl svg { min-width: 760px; }
+  .sprint-detail { margin-top: 12px; }
+  .sprint-detail .card { border-left: 3px solid var(--work); }
+  .tasks { margin: 8px 0 0; padding-left: 0; list-style: none; font-size: 13px; }
+  .tasks li { padding: 5px 0; border-bottom: 1px solid var(--grid); display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+  .tasks li:last-child { border-bottom: 0; }
+  .tasks li code { color: var(--ink); }
+  .check { list-style: none; padding-left: 0; margin: 6px 0 0; font-size: 13px; }
+  .check li { padding: 3px 0 3px 22px; position: relative; }
+  .check li::before { content: "☐"; position: absolute; left: 0; color: var(--muted); }
+
+  /* ---------- journeys / briefing mock ---------- */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab { padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--ink-2); cursor: pointer; font: inherit; font-size: 12.5px; }
+  .tab[aria-selected="true"] { background: rgba(124,92,255,.22); color: #fff; border-color: rgba(124,92,255,.5); }
+  .panel { display: none; } .panel.open { display: block; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+  .steps li { counter-increment: s; position: relative; padding: 8px 0 8px 40px; font-size: 13.5px; border-bottom: 1px solid var(--grid); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 8px; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: rgba(37,208,192,.16); color: #9df0e6; }
+  .brief { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; font-size: 13.5px; }
+  .brief h5 { margin: 12px 0 4px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .brief h5:first-child { margin-top: 0; }
+  .brief ul { margin: 0; padding-left: 18px; }
+  .brief .act { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); align-items: center; }
+  .brief .act:last-child { border-bottom: 0; }
+  .brief .act .b { display: flex; gap: 6px; }
+  .brief .act .b button { padding: 4px 9px; font-size: 11.5px; }
+
+  /* ---------- sequence ---------- */
+  .seq { display: grid; gap: 6px; }
+  .seq .m { display: grid; grid-template-columns: 150px 22px 170px minmax(0,1fr); gap: 8px; align-items: center; font-size: 12.5px; padding: 6px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .seq .m .who { font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+  .seq .m .who .sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .seq .m .arrow { color: var(--muted); text-align: center; }
+  .seq .m .txt { color: var(--ink-2); }
+  .seq .m.user { border-color: rgba(37,208,192,.35); }
+
+  /* ---------- TODAY mock ---------- */
+  .today { background: var(--bg1); border: 1px solid var(--border); border-radius: 18px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr 220px; gap: 12px; font-size: 12.5px; }
+  .today .pane { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+  .today .pane h6 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .today .pane h6 .sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .today .pane ul { margin: 0; padding-left: 16px; color: var(--ink-2); }
+  .today .wide { grid-column: 1 / 3; }
+  .today .bar { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+  .today .bar .orb { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(120deg, var(--accent), var(--accent-b)); box-shadow: 0 0 12px var(--accent); }
+
+  /* ---------- matrix ---------- */
+  .matrix { display: grid; grid-template-columns: 170px repeat(3, 1fr); gap: 6px; font-size: 12.5px; }
+  .matrix .h { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 8px 10px; }
+  .matrix .r { padding: 9px 10px; color: var(--ink); font-weight: 600; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+  .matrix .r small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
+  .matrix .c { padding: 9px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
+  .matrix .c .ic { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; flex: none; color: #fff; font-weight: 800; }
+  .matrix .c.ok .ic { background: var(--good); } .matrix .c.pend .ic { background: var(--warn); color: #1a1a19; } .matrix .c.no .ic { background: var(--crit); }
+
+  @media (max-width: 980px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    main { max-width: 100%; overflow-x: hidden; }
+    table.t { display: block; overflow-x: auto; white-space: normal; }
+    .kpi .tile { flex: 1 1 130px; }
+    .brief .act { grid-template-columns: 1fr; }
+    .seq .m { grid-template-columns: 1fr; gap: 2px; } .seq .m .arrow { display: none; }
+    nav.side { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+    nav.side .links { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+    nav.side h4 { display: none; }
+    nav.side a { white-space: nowrap; }
+    main { padding: 20px 18px 60px; }
+    .g2, .g3, .g4, .split, .pipe { grid-template-columns: 1fr; }
+    .step::after { content: none; }
+    .today { grid-template-columns: 1fr; } .today .wide { grid-column: auto; }
+    .matrix { grid-template-columns: 1fr; }
+    .matrix .h { display: none; }
+    .matrix .r { margin-top: 8px; }
+    .matrix .c::before { color: var(--muted); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; min-width: 82px; }
+    .matrix .c:nth-child(4n+2)::before { content: "Observe"; }
+    .matrix .c:nth-child(4n+3)::before { content: "Suggest"; }
+    .matrix .c:nth-child(4n+4)::before { content: "Automate"; }
+    .layer { grid-template-columns: 1fr; }
+    h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<div class="app">
+<nav class="side" aria-label="Sections">
+  <div class="brand"><span class="dot"></span><div><b>Zavora Personal AI OS</b><small>Concept &amp; sprint plan · v1.0</small></div></div>
+  <div class="links">
+    <h4>Concept</h4>
+    <a href="#vision"><span class="n">01</span>Vision</a>
+    <a href="#architecture"><span class="n">02</span>Architecture</a>
+    <a href="#mother"><span class="n">03</span>Mother Agent</a>
+    <a href="#worlds"><span class="n">04</span>Work &amp; Home Worlds</a>
+    <a href="#agents"><span class="n">05</span>Agent catalog</a>
+    <a href="#intelligence"><span class="n">06</span>Intelligence layer</a>
+    <a href="#baseline"><span class="n">07</span>Personal baseline</a>
+    <a href="#balance"><span class="n">08</span>Balance system</a>
+    <a href="#automation"><span class="n">09</span>Automation layer</a>
+    <a href="#memory"><span class="n">10</span>Memory</a>
+    <a href="#privacy"><span class="n">11</span>Privacy &amp; security</a>
+    <a href="#journeys"><span class="n">12</span>User journeys</a>
+    <a href="#a2a"><span class="n">13</span>Agent-to-agent</a>
+    <a href="#ui"><span class="n">14</span>Command center</a>
+    <a href="#future"><span class="n">15</span>Future expansion</a>
+    <h4>Delivery</h4>
+    <a href="#sprints"><span class="n">16</span>Sprint plan</a>
+    <a href="#backlog"><span class="n">17</span>Backlog &amp; risks</a>
+    <a href="#sources"><span class="n">18</span>Sources</a>
+  </div>
+</nav>
+<main>
+
+<!-- ============================ HERO ============================ -->
+<section id="top">
+  <div class="eyebrow">Zavora OS · Phase 2 concept</div>
+  <h1>A Personal AI Operating System for everyday life</h1>
+  <p class="lead">One Mother Agent that understands the whole person, coordinating a network of specialized agents across a <b>Work World</b> and a <b>Home World</b>, with an intelligence layer that learns your normal, a three-level automation model that keeps you in control, and memory you own.</p>
+  <div class="quote">One person → One AI OS → One Mother Agent → Many specialized agents → One coordinated life.</div>
+  <div class="kpi">
+    <div class="tile"><div class="label">Coordinating agents</div><div class="value">3</div><div class="sub">Mother · Work Mother · Home Mother</div></div>
+    <div class="tile"><div class="label">Specialized agents</div><div class="value">16</div><div class="sub">8 Work · 8 Home</div></div>
+    <div class="tile"><div class="label">Intelligence agents</div><div class="value">5</div><div class="sub">patterns · baseline · balance · behaviour · knowledge</div></div>
+    <div class="tile"><div class="label">Authority levels</div><div class="value">3</div><div class="sub">Observe · Suggest · Automate</div></div>
+    <div class="tile"><div class="label">Sprints to beta</div><div class="value">13</div><div class="sub">S0–S12 · ~25 weeks · 4 releases</div></div>
+  </div>
+  <p class="muted" style="font-size:12.5px">Built on <a href="https://github.com/zavora-ai/zavora-os" target="_blank" rel="noopener">zavora-ai/zavora-os</a> @ <code>228ec78</code> — Rust/Axum + adk-rust, Gemini, MCP toolservers, Agentic Web Protocol. Full documents: <a href="https://github.com/zavora-ai/zavora-os/pull/1" target="_blank" rel="noopener">pull request #1</a>.</p>
+</section>
+
+<!-- ============================ 01 VISION ============================ -->
+<section id="vision">
+  <h2><span class="n">01</span>Vision</h2>
+  <div class="split">
+    <div>
+      <h3>The problem</h3>
+      <p>People run their lives through a dozen disconnected tools: work email, Slack, two calendars, banking, health trackers, family chats, social media, news, music. Each has its own notifications and its own "assistant", and none knows what the others are doing. The person is the only integration layer, and the person is tired.</p>
+      <h3>The shift</h3>
+      <p>A chatbot answers questions. An operating system <b>owns the context</b>, <b>schedules work across processes</b>, and <b>enforces permissions</b>. The Personal AI OS applies those three ideas to a person's digital life. Suzy, the existing Zavora coordinator persona, becomes the voice of a real orchestrator.</p>
+      <table class="t" style="margin-top:8px">
+        <thead><tr><th>OS concept</th><th>Personal AI OS equivalent</th></tr></thead>
+        <tbody>
+          <tr><td>Kernel / scheduler</td><td>Mother Agent — routes, delegates, arbitrates, synthesizes</td></tr>
+          <tr><td>Processes</td><td>Specialized agents — one per life area, narrow tools</td></tr>
+          <tr><td>Partitions</td><td>Work World and Home World — isolated, reconciled by the kernel</td></tr>
+          <tr><td>Telemetry</td><td>Content-free activity ledger feeding the intelligence layer</td></tr>
+          <tr><td>Capabilities</td><td>Observe · Suggest · Automate, per agent, per tool effect</td></tr>
+          <tr><td>User's filesystem</td><td>Personal memory — known · assumed · recommended, user-editable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h4>Design principles</h4>
+      <div class="principle"><span class="num">1</span><span><b>Orchestrate, don't chat.</b> The Mother Agent coordinates; it does not do everything itself.</span></div>
+      <div class="principle"><span class="num">2</span><span><b>Two worlds, one life.</b> Work and Home stay separated by default; only the Mother Agent sees both.</span></div>
+      <div class="principle"><span class="num">3</span><span><b>Inform and suggest, never control.</b> Observations come with a question, not a verdict.</span></div>
+      <div class="principle"><span class="num">4</span><span><b>Neutral language.</b> "You've worked later than usual for two weeks", never "you're overworking".</span></div>
+      <div class="principle"><span class="num">5</span><span><b>Never assume why.</b> Report what changed; offer to help review.</span></div>
+      <div class="principle"><span class="num">6</span><span><b>Least privilege everywhere.</b> Discovery ≠ exposure. Agents get only the tools and memory they need.</span></div>
+      <div class="principle"><span class="num">7</span><span><b>Human in control.</b> Every external action has a permission level; one switch pauses everything.</span></div>
+      <div class="principle"><span class="num">8</span><span><b>Honest data.</b> No fabricated facts, no silent stubs.</span></div>
+      <div class="principle"><span class="num">9</span><span><b>Memory is the user's.</b> Readable, editable, deletable, exportable, with provenance.</span></div>
+      <div class="principle"><span class="num">10</span><span><b>Health and money stay conservative.</b> Wellness escalates to professionals; finance never moves money on its own.</span></div>
+    </div>
+  </div>
+  <h3>What changes from today's Zavora OS</h3>
+  <table class="t">
+    <thead><tr><th>Today (scenario tour)</th><th>Phase 2 (coordinated life)</th></tr></thead>
+    <tbody>
+      <tr><td>Intent → one of 7 scenario keys</td><td>Intent → Mother Agent → world(s) → agent(s), several in one turn</td></tr>
+      <tr><td>Suzy summarizes after cards resolve</td><td>Mother plans, delegates, arbitrates; Suzy-voice synthesizes</td></tr>
+      <tr><td>Agents grouped by demo scenario</td><td>Agents grouped by life domain under a coordinating agent per world</td></tr>
+      <tr><td>Tool allowlists (which tools)</td><td>Allowlists + authority modes + tool effect classes</td></tr>
+      <tr><td>Session state only</td><td>Session + ledger + baselines + observations + memory + audit</td></tr>
+      <tr><td>Three demo ambient agents on cron</td><td>Intelligence layer on cron: patterns, baseline, balance, behaviour, knowledge</td></tr>
+      <tr><td>Greeting + morning brief</td><td>Daily briefing across Work · Home · Learning · Wellbeing · Balance · Actions</td></tr>
+      <tr><td>Spatial card field</td><td>Card field + TODAY command center + Mother chat + trust center</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ 02 ARCHITECTURE ============================ -->
+<section id="architecture">
+  <h2><span class="n">02</span>System architecture</h2>
+  <p class="lead">Click any node to see what it does and where it maps in the codebase.</p>
+  <div class="arch" id="arch">
+    <div class="layer"><div class="name">Surface<small>how the person reaches it</small></div>
+      <div class="nodes">
+        <button class="node shared" data-node="ui"><span class="t"><i class="sw"></i>Field UI · TODAY · Trust center</span><span class="s">web/index.html · field-client.js</span></button>
+        <button class="node shared" data-node="voice"><span class="t"><i class="sw"></i>Suzy live voice</span><span class="s">src/voice/realtime.rs</span></button>
+        <button class="node shared" data-node="awp"><span class="t"><i class="sw"></i>AWP · external agents</span><span class="s">/awp/a2a · business.toml</span></button>
+      </div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Kernel<small>one brain</small></div>
+      <div class="nodes"><button class="node mother" data-node="mother"><span class="t">✦ Mother Agent <span class="muted" style="font-weight:500;font-size:12px">(Suzy voice)</span></span><span class="s">context · routing · delegation · arbitration · synthesis — src/mother/</span></button></div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Worlds<small>two partitions</small></div>
+      <div class="nodes">
+        <button class="node work" data-node="work"><span class="t"><i class="sw"></i>Work World · Work Mother</span><span class="s">Productivity · Email · Team Comms · Project · Career · Research &amp; Knowledge · Professional Social · Work Automation</span></button>
+        <button class="node home" data-node="home"><span class="t"><i class="sw"></i>Home World · Home Mother</span><span class="s">Family · Personal Productivity · Health &amp; Wellness · Finance · AI Radio / Entertainment · Social &amp; Fun · Personal Social · Travel</span></button>
+      </div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Intelligence<small>observes both worlds</small></div>
+      <div class="nodes">
+        <button class="node intel" data-node="ledger"><span class="t"><i class="sw"></i>Activity ledger</span><span class="s">content-free events</span></button>
+        <button class="node intel" data-node="patterns"><span class="t"><i class="sw"></i>Patterns &amp; behaviour</span><span class="s">deterministic stats</span></button>
+        <button class="node intel" data-node="baseline"><span class="t"><i class="sw"></i>Personal baseline</span><span class="s">drift detection</span></button>
+        <button class="node intel" data-node="balance"><span class="t"><i class="sw"></i>Balance</span><span class="s">work ↔ home</span></button>
+        <button class="node intel" data-node="knowledge"><span class="t"><i class="sw"></i>Reading &amp; knowledge</span><span class="s">knowledge graph</span></button>
+      </div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Memory<small>the user's</small></div>
+      <div class="nodes"><button class="node shared" data-node="memory"><span class="t"><i class="sw"></i>Personal memory — known · assumed · recommended</span><span class="s">scoped by domain · provenance · consent · encrypted when sensitive</span></button></div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Automation &amp; trust<small>every write passes here</small></div>
+      <div class="nodes">
+        <button class="node trust" data-node="gate"><span class="t"><i class="sw"></i>Permission gate</span><span class="s">Observe / Suggest / Automate × effect</span></button>
+        <button class="node trust" data-node="pending"><span class="t"><i class="sw"></i>Pending actions</span><span class="s">approve · edit · reject · undo</span></button>
+        <button class="node trust" data-node="audit"><span class="t"><i class="sw"></i>Audit log</span><span class="s">who · what · on whose approval</span></button>
+        <button class="node trust" data-node="privacy"><span class="t"><i class="sw"></i>Privacy controls</span><span class="s">identity · encryption · consent · retention</span></button>
+      </div></div>
+    <div class="connector"></div>
+    <div class="layer"><div class="name">Real world<small>MCP toolservers</small></div>
+      <div class="nodes"><button class="node" data-node="mcp"><span class="t">calendar · email · Slack · CRM · GitHub · banking · maps · weather · real estate · news · spreadsheets · documents · slides</span><span class="s">mcp_allowlists.toml — discovery ≠ exposure</span></button></div></div>
+  </div>
+  <div class="detail" id="archDetail"><b>Select a node above.</b> <span class="muted">The detail panel shows responsibilities, today's code, and the Phase 2 change.</span></div>
+</section>
+
+<!-- ============================ 03 MOTHER AGENT ============================ -->
+<section id="mother">
+  <h2><span class="n">03</span>Mother Agent</h2>
+  <p class="lead">The user's primary AI companion and operating-system-level coordinator. It orchestrates; it does not try to do everything itself.</p>
+  <div class="pipe">
+    <div class="step"><div class="k">1 · Intake</div><b>Classify</b><p>Domain(s), target agents, question vs action, urgency, or a clarifying question.</p></div>
+    <div class="step"><div class="k">2 · Context</div><b>Assemble</b><p>Memory (known/assumed), today's baseline, open observations, session state. Facts, never raw inboxes.</p></div>
+    <div class="step"><div class="k">3 · Delegate</div><b>Plan</b><p>Parallel or sequential tasks per world, each with a trace id, via the Work and Home mothers.</p></div>
+    <div class="step"><div class="k">4 · Arbitrate</div><b>Reconcile</b><p>Boundary rules, conflicting proposals become one question, health/finance labels pass through.</p></div>
+    <div class="step"><div class="k">5 · Synthesize</div><b>One voice</b><p>Suzy composes 2–4 sentences with actions, each tagged with its permission mode.</p></div>
+    <div class="step"><div class="k">6 · Gate</div><b>Act</b><p>Observe → facts only · Suggest → pending approval · Automate → run, audit, undo.</p></div>
+  </div>
+  <div class="split" style="margin-top:16px">
+    <div>
+      <h3>Responsibilities</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>Understand overall context</td><td>Reads memory, baseline snapshot, observations, both worlds' status</td></tr>
+          <tr><td>Coordinate all agents</td><td>Delegates through Work/Home mothers; never calls a leaf agent's tools directly</td></tr>
+          <tr><td>Unified priorities</td><td>Merged view from Work Productivity and Home Personal Productivity</td></tr>
+          <tr><td>Decide who handles what</td><td>Intake classifier → world(s) → agent(s); fan-out when a task spans domains</td></tr>
+          <tr><td>Combine information</td><td>One response from many agent outputs (today's Suzy summarizer, generalized)</td></tr>
+          <tr><td>Detect work/home conflicts</td><td>Balance Agent observations; cross-calendar checks at delegation time</td></tr>
+          <tr><td>Notice routine changes</td><td>Personal Baseline drift observations; chooses when to surface them</td></tr>
+          <tr><td>Learn preferences</td><td>Proposes <i>assumed</i> memory; promotes to <i>known</i> only when the user confirms</td></tr>
+          <tr><td>Automate when authorized</td><td>Approved recipes only, in Automate mode, every run audited</td></tr>
+          <tr><td>Protect the boundary</td><td>Will not schedule work into protected personal time without asking</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div class="callout"><b>What it is not.</b> Not a chatbot answering from its own knowledge. Not omnipotent: it has <b>no MCP tools of its own</b>, only internal tools (<code>get_context</code>, <code>delegate</code>, <code>read_memory</code>, <code>propose_memory</code>, <code>read_observations</code>, <code>compose</code>). A bad routing decision means "wrong agent asked", never "wrong email sent". Not surveillance: it sees aggregates and observations, not every agent's raw content.</div>
+      <h3>Intake output (example)</h3>
+<pre><code>{
+  "domains": ["work", "home"],
+  "targets": [
+    {"world": "work", "agent": "productivity", "task": "today's priorities"},
+    {"world": "home", "agent": "family",       "task": "today's commitments"}
+  ],
+  "kind": "question", "urgency": "normal", "clarify": null
+}</code></pre>
+      <h3>Always one sentence away</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>"What do I need to know today?"</td><td>Daily briefing across both worlds</td></tr>
+          <tr><td>"Prepare me for my afternoon."</td><td>Work Productivity + Team Comms prep + Family (evening)</td></tr>
+          <tr><td>"What's happening with work?"</td><td>Work Mother fan-out: Productivity, Email, Team, Project</td></tr>
+          <tr><td>"Remind me about family commitments."</td><td>Family Agent</td></tr>
+          <tr><td>"I'm overwhelmed. Help me reorganize today."</td><td>Re-plan across both worlds, presented for approval</td></tr>
+          <tr><td>"What have I been reading lately?"</td><td>Reading &amp; Knowledge Agent</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 04 WORLDS ============================ -->
+<section id="worlds">
+  <h2><span class="n">04</span>Two primary worlds</h2>
+  <p class="lead">The Mother Agent divides digital life into a Work World and a Home World. They stay logically separated, each with its own coordinating agent, identities and memory scope, and communicate only through the Mother Agent.</p>
+  <div class="grid g2">
+    <div class="card" style="border-top:3px solid var(--work)">
+      <div class="rail"><span class="tag work"><i class="sw"></i>Work World</span><span class="tag">Work Mother Agent · <code>work_mother</code></span></div>
+      <p style="margin-top:10px">Owns the work calendar, work identities (work email, Slack, GitHub, CRM, LinkedIn) and the <code>work.*</code> memory scope. Fans out to its sub-agents, merges results, returns one structured result.</p>
+      <p style="margin-top:8px"><b>Default posture:</b> <span class="mode">💡 Suggest</span> for anything that leaves the machine (send, post, schedule with others). <span class="mode">⚡ Automate</span> allowed for internal organization (labels, task creation, summaries) once opted in.</p>
+      <div class="rail" style="margin-top:12px">
+        <span class="tag">🗓 Productivity</span><span class="tag">✉️ Email</span><span class="tag">💬 Team Communication</span><span class="tag">📁 Project</span>
+        <span class="tag">🎯 Career</span><span class="tag">📚 Research &amp; Knowledge</span><span class="tag">💼 Professional Social</span><span class="tag">⚙️ Work Automation</span>
+      </div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--home)">
+      <div class="rail"><span class="tag home"><i class="sw"></i>Home World</span><span class="tag">Home Mother Agent · <code>home_mother</code></span></div>
+      <p style="margin-top:10px">Owns the personal calendar, contacts, personal finance, health imports, media preferences and the <code>home.*</code> memory scope. Personal Google account is a separate identity from work.</p>
+      <p style="margin-top:8px"><b>Default posture:</b> <span class="mode">👁 Observe</span> for anything sensitive (health, money, social accounts). <span class="mode">💡 Suggest</span> for reminders and plans. <span class="mode">⚡ Automate</span> only for low-risk conveniences the user enables.</p>
+      <div class="rail" style="margin-top:12px">
+        <span class="tag">🏡 Family</span><span class="tag">✅ Personal Productivity</span><span class="tag">💪 Health &amp; Wellness</span><span class="tag">💸 Personal Finance</span>
+        <span class="tag">📻 AI Radio / Entertainment</span><span class="tag">🎲 Social &amp; Fun</span><span class="tag">📱 Personal Social</span><span class="tag">✈️ Travel &amp; Errands</span>
+      </div>
+    </div>
+  </div>
+  <div class="callout" style="margin-top:14px"><b>Example of separation and reconciliation.</b> Mother → Work Mother → Email Agent runs while Mother → Home Mother → Family Agent runs. Neither sees the other's data. The Mother Agent sees both, and can say: "You have a family commitment tomorrow evening, but your current work schedule extends into that period. Would you like me to help reorganize your tasks?"</div>
+</section>
+
+<!-- ============================ 05 AGENT CATALOG ============================ -->
+<section id="agents">
+  <h2><span class="n">05</span>Specialized agents</h2>
+  <p class="lead">Every agent implements the same contract: an identity and world, one mission, an MCP tool allowlist with an <b>effect class per tool</b>, a permission mode, a memory scope, and typed outputs (card · observation · memory proposal · pending action). Filter by world, then click a card.</p>
+  <div class="chips" id="agentFilters" role="group" aria-label="Filter agents">
+    <button class="chip" data-f="all" aria-pressed="true">All <span class="muted" id="cntAll"></span></button>
+    <button class="chip" data-f="work">Work</button>
+    <button class="chip" data-f="home">Home</button>
+    <button class="chip" data-f="intel">Intelligence</button>
+    <button class="chip" data-f="shared">Shared</button>
+    <button class="chip" data-f="new">New in Phase 2</button>
+    <button class="chip" data-f="extend">Extends existing code</button>
+  </div>
+  <div class="grid g3" id="agentGrid"></div>
+  <h3>Agent contract (declarative half)</h3>
+<pre><code>id          = "email"
+world       = "work"                      # work | home | shared
+mission     = "Keep the user's professional inbox understood and answered."
+mcp_servers = ["email"]
+mode        = "suggest"                   # observe | suggest | automate (user-overridable)
+memory_scope = ["work.contacts", "work.preferences.email"]
+emits       = ["card", "observation", "memory_proposal", "pending_action"]
+
+[tools]                                   # effect classes drive the permission gate
+list_inbox      = "read"
+create_draft    = "write_local"
+send_draft      = "send_external"</code></pre>
+</section>
+
+<!-- ============================ 06 INTELLIGENCE ============================ -->
+<section id="intelligence">
+  <h2><span class="n">06</span>Observation &amp; intelligence layer</h2>
+  <p class="lead">Sits above both worlds. Observes patterns without reading raw content, respects permissions, and produces <b>observations</b> the Mother Agent may surface. Deterministic statistics first; an LLM only to phrase the result in neutral language.</p>
+  <div class="split">
+    <div>
+      <h3>The activity ledger (foundation)</h3>
+      <p>Everything the intelligence layer knows comes from one append-only, <b>content-free</b> table. Subjects are hashed; <code>meta</code> holds counts, categories and durations, never bodies. Domain is mandatory: that is what makes the Balance Agent possible.</p>
+<pre><code>activity_events
+  user_id · ts · domain (work|home|shared) · agent_id
+  kind   (intent | tool_call | card_resolve | approval | observation |
+          task_postponed | reading | session_focus | notification …)
+  effect (read | write_local | send_external | …)
+  duration_ms · subject_hash (HMAC, no content) · meta (JSONB, schema-checked) · trace_id</code></pre>
+      <h3>Neutral language, enforced</h3>
+      <table class="t">
+        <thead><tr><th>Do</th><th>Don't</th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:500">"You've worked past 19:00 on 8 of the last 10 workdays; your usual is 17:30."</td><td>"You're overworking."</td></tr>
+          <tr><td style="font-weight:500">"Three personal tasks have been moved four times."</td><td>"You keep procrastinating."</td></tr>
+          <tr><td style="font-weight:500">"Would you like me to help you review what's changed?"</td><td>"You should stop working late."</td></tr>
+          <tr><td style="font-weight:500">State the number, the period, and the baseline.</td><td>Guess the cause, attach a mood, or moralize.</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">A lint rejects banned vocabulary and requires number + period + baseline reference in every observation. Observations are deduplicated, cooled down (one per dimension per 7 days) and surfaced only in the briefing or on request, never as interrupting pop-ups.</p>
+    </div>
+    <div class="grid" style="gap:10px">
+      <div class="card"><div class="rail"><span class="tag intel"><i class="sw"></i>Pattern Recognition</span></div><p style="margin-top:8px">Working hours, reading habits, communication patterns, productivity, social media usage, sleep/routine, repeated tasks, frequently postponed tasks, changes in normal behaviour. Nightly plus 30-minute incremental.</p></div>
+      <div class="card"><div class="rail"><span class="tag intel"><i class="sw"></i>Reading &amp; Knowledge</span></div><p style="margin-top:8px">What the user reads, how often, recurring topics, growing interests. Builds a personal knowledge graph: topic → item → project → person → career goal.</p></div>
+      <div class="card"><div class="rail"><span class="tag intel"><i class="sw"></i>Balance</span></div><p style="margin-top:8px">Compares Work and Home activity: attention share, spillover, boundary crossings, postponement debt, family cadence. Informs and suggests, never controls.</p></div>
+      <div class="card"><div class="rail"><span class="tag intel"><i class="sw"></i>Digital Behaviour</span></div><p style="margin-top:8px">Context switching, notification load, long uninterrupted work, repeated distractions, social consumption, unusual routine changes. Thresholds are the user's to tune.</p></div>
+      <div class="card"><div class="rail"><span class="tag intel"><i class="sw"></i>Personal Baseline</span></div><p style="margin-top:8px">Learns what is normal per dimension; flags meaningful deviation; asks, never assumes why. Detailed next.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 07 BASELINE ============================ -->
+<section id="baseline">
+  <h2><span class="n">07</span>Personal baseline — "going off the book"</h2>
+  <p class="lead">The system gradually learns what is normal for this user, then flags meaningful deviation. It does not assume why. It asks whether the user wants to review.</p>
+  <div class="split">
+    <div class="viz">
+      <div class="head"><div><h4>Last 14 days vs your 28-day baseline</h4><div class="sub">Deviation from the user's own normal, per tracked dimension · illustrative data</div></div>
+        <button class="btn" data-table="baselineTable">Show table</button></div>
+      <svg class="chart" id="baselineChart" viewBox="0 0 560 300" role="img" aria-labelledby="baselineTitle"><title id="baselineTitle">Deviation from personal baseline over the last 14 days, by dimension</title></svg>
+      <div class="tablewrap" id="baselineTable"></div>
+    </div>
+    <div>
+      <div class="card" style="border-left:3px solid var(--intel)">
+        <h4>Observation the Mother Agent would surface</h4>
+        <p>"Your routine has changed over the last two weeks. You've been working later than usual and spending less time on your personal activities. <b>Would you like me to help you review what's changed?</b>"</p>
+        <div class="rail" style="margin-top:10px"><button class="btn">Yes, review</button><button class="btn">Not now</button><button class="btn">This is my new normal</button></div>
+      </div>
+      <h3>Learning model</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>Warm-up</td><td>14 days before any drift observation; UI shows "learning your routine — 9 of 14 days"</td></tr>
+          <tr><td>Baseline window</td><td>Rolling 28 days, weekday/weekend separated, median + MAD (robust to a few late nights)</td></tr>
+          <tr><td>Deviation</td><td>|median<sub>recent</sub> − median<sub>baseline</sub>| &gt; max(2.5 · MAD, floor); floors per dimension</td></tr>
+          <tr><td>Meaningful</td><td>≥ 2 dimensions drifting, or 1 dimension for ≥ 10 days</td></tr>
+          <tr><td>Cooldown</td><td>7 days per dimension; no nagging</td></tr>
+          <tr><td>Confirmation</td><td>"Is this your usual routine?" after warm-up → confirmed values become <i>known</i> memory</td></tr>
+          <tr><td>Reset</td><td>Re-learn after a life change: new job, baby, move</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:12.5px">A self-awareness layer, not surveillance: the user sees exactly which dimensions are tracked, can switch any off, and can delete the ledger.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 08 BALANCE ============================ -->
+<section id="balance">
+  <h2><span class="n">08</span>Balance system</h2>
+  <p class="lead">The Balance Agent is the only component that routinely looks at both worlds. It reports differences from the user's own baseline and offers help. It never says "too much", "should", or "unhealthy".</p>
+  <div class="split">
+    <div class="viz">
+      <div class="head"><div><h4>Attention by domain this week</h4><div class="sub">Minutes of recorded activity per day · illustrative data</div></div>
+        <button class="btn" data-table="balanceTable">Show table</button></div>
+      <div class="legend"><span><i style="background:var(--work)"></i>Work</span><span><i style="background:var(--home)"></i>Home</span><span><i style="background:var(--muted);height:2px"></i>Usual work day (8.5 h)</span></div>
+      <svg class="chart" id="balanceChart" viewBox="0 0 560 290" role="img" aria-labelledby="balanceTitle"><title id="balanceTitle">Stacked bars of work and home minutes for each day of the week</title></svg>
+      <div class="tablewrap" id="balanceTable"></div>
+    </div>
+    <div>
+      <h3>What it measures</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>Attention share</td><td>Work vs home minutes per day and week, from the ledger</td></tr>
+          <tr><td>Boundary crossings</td><td>Work inside protected home blocks; home inside focus blocks</td></tr>
+          <tr><td>Spillover</td><td>Work after the usual end time; weekend work</td></tr>
+          <tr><td>Postponement debt</td><td>Personal tasks postponed ≥ 3 times</td></tr>
+          <tr><td>Family / social cadence</td><td>Communication volume vs baseline</td></tr>
+          <tr><td>Recovery signals</td><td>Reading, exercise, sleep vs baseline (observe-only)</td></tr>
+        </tbody>
+      </table>
+      <h3>Example observations</h3>
+      <div class="quote">"You've spent significantly more time on work-related activities this week than usual — about 11 hours more than your 4-week average."</div>
+      <div class="quote">"You have three unfinished personal tasks that have been repeatedly postponed: renew passport, book dentist, call the plumber."</div>
+      <h3>Boundaries the user declares</h3>
+      <div class="rail"><span class="tag">Working hours</span><span class="tag">Protected time</span><span class="tag">Quiet hours</span><span class="tag">Focus blocks</span><span class="tag">Do not disturb</span></div>
+      <p class="muted" style="font-size:12.5px;margin-top:8px">Outside working hours, work agents drop to Observe and queue attention for the morning. The Mother Agent will not schedule work into protected time without asking.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 09 AUTOMATION ============================ -->
+<section id="automation">
+  <h2><span class="n">09</span>Automation layer</h2>
+  <p class="lead">The system takes <b>authorized</b> actions. Authorization is per agent, overridable per tool, and enforced where it matters: at the tool call. Every tool carries an <b>effect class</b>; the gate decides by effect, not by tool name, so new integrations slot in without new rules.</p>
+  <div class="grid g3" style="margin-bottom:14px">
+    <div class="card"><div class="glyph">👁</div><h4>Observe</h4><p>Analyze, summarize, propose memory, emit observations. Cannot change anything outside the OS. <code>read</code> only.</p></div>
+    <div class="card"><div class="glyph">💡</div><h4>Suggest</h4><p>Prepare an action and wait for approval. Drafts and artifacts (<code>write_local</code>) happen immediately; everything else becomes a <b>pending action</b>.</p></div>
+    <div class="card"><div class="glyph">⚡</div><h4>Automate</h4><p>Perform predefined actions within approved <b>recipes</b>. Every run is audited and undoable where reversible. Never for public posts or money.</p></div>
+  </div>
+  <div class="matrix" role="table" aria-label="Permission matrix: effect class by mode">
+    <div class="h" role="columnheader">Tool effect</div><div class="h" role="columnheader">👁 Observe</div><div class="h" role="columnheader">💡 Suggest</div><div class="h" role="columnheader">⚡ Automate</div>
+    <div class="r">read<small>list_inbox · get_today · list_transactions</small></div><div class="c ok"><span class="ic">✓</span>runs, logged</div><div class="c ok"><span class="ic">✓</span>runs, logged</div><div class="c ok"><span class="ic">✓</span>runs, logged</div>
+    <div class="r">write_local<small>create_draft · save_presentation · create_task</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c ok"><span class="ic">✓</span>runs immediately</div><div class="c ok"><span class="ic">✓</span>runs</div>
+    <div class="r">schedule_with_others<small>create_event with attendees</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c pend"><span class="ic">…</span>pending approval</div><div class="c ok"><span class="ic">✓</span>if a recipe allows</div>
+    <div class="r">send_external<small>send_draft · reply_to_email · Slack send</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c pend"><span class="ic">…</span>pending approval</div><div class="c ok"><span class="ic">✓</span>if a recipe allows</div>
+    <div class="r">delete<small>archive / delete mail, remove event</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c pend"><span class="ic">…</span>pending approval</div><div class="c ok"><span class="ic">✓</span>if recipe allows and reversible</div>
+    <div class="r">publish_public<small>LinkedIn · X · Instagram post</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c pend"><span class="ic">…</span>pending approval</div><div class="c no"><span class="ic">✕</span>never automated</div>
+    <div class="r">financial<small>transfers · payments · purchases</small></div><div class="c no"><span class="ic">✕</span>denied</div><div class="c pend"><span class="ic">…</span>pending + confirmation</div><div class="c no"><span class="ic">✕</span>never automated</div>
+  </div>
+  <div class="split" style="margin-top:16px">
+    <div class="card">
+      <h4>Try the gate</h4>
+      <p>Pick an agent mode and a tool effect to see what the permission gate does.</p>
+      <div class="rail" style="margin-top:10px">
+        <label class="tag">Mode <select id="gMode" style="margin-left:6px;background:var(--surface-2);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font:inherit"><option value="observe">Observe</option><option value="suggest" selected>Suggest</option><option value="automate">Automate</option></select></label>
+        <label class="tag">Effect <select id="gEffect" style="margin-left:6px;background:var(--surface-2);color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font:inherit"><option>read</option><option>write_local</option><option>schedule_with_others</option><option selected>send_external</option><option>delete</option><option>publish_public</option><option>financial</option></select></label>
+        <label class="tag"><input type="checkbox" id="gRecipe" style="margin-right:6px"> approved recipe matches</label>
+      </div>
+      <div class="detail" id="gOut" style="min-height:64px"></div>
+    </div>
+    <div>
+      <h3>Where the gate lives</h3>
+<pre><code>LlmAgent ─▶ PermissionGate(agent, mode, effects) ─▶ FilteredToolset ─▶ MCP
+               ├─ read ............ pass through, log
+               ├─ write_local ..... pass if mode ≥ suggest, log
+               ├─ other effects ... automate &amp; recipe → run, audit, undo token
+               │                    suggest → enqueue pending_action
+               └─ observe &amp; effect ≠ read → "not permitted in observe mode"</code></pre>
+      <p class="muted" style="font-size:12.5px">The agent's prompt is told its mode, so it plans "draft and queue" rather than "send". Zavora OS already wraps toolsets (<code>GeminiSanitizedToolset</code>, <code>FilteredToolset</code>); the gate is one more wrapper.</p>
+      <h3>Recipes: automation the user approves once</h3>
+<pre><code>recipe: archive-newsletters
+owner_agent: email
+trigger: cron "0 */30 * * * *"
+condition: sender in known_newsletter_senders and unread &gt; 2 days
+action: archive            # effect: delete, reversible
+mode: automate · approved_by_user: 2026-10-14 · undo_window: 7d</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 10 MEMORY ============================ -->
+<section id="memory">
+  <h2><span class="n">10</span>Personal memory</h2>
+  <p class="lead">Secure, user-controlled, transparent. The system always distinguishes <b>what it knows</b>, <b>what it assumes</b>, and <b>what it recommends</b>, and cites the kind whenever it uses a memory.</p>
+  <div class="grid g3">
+    <div class="card" style="border-top:3px solid var(--work)"><h4>Known</h4><p class="muted" style="font-size:12px">The user said it, confirmed it, or it comes from an authorized source.</p>
+      <div class="quote" style="font-size:13px;margin:10px 0 6px">"You told me: no meetings before 10:00."</div>
+      <div class="quote" style="font-size:13px;margin:6px 0">"From your calendar: Sara's birthday is 20 Oct."</div>
+      <div class="rail"><span class="tag">Edit</span><span class="tag">Forget</span><span class="tag">Why?</span></div></div>
+    <div class="card" style="border-top:3px solid var(--home)"><h4>Assumed</h4><p class="muted" style="font-size:12px">Inferred from patterns. Never becomes <i>known</i> without the user.</p>
+      <div class="quote" style="font-size:13px;margin:10px 0 6px">"I think you usually start work around 09:40 <span class="muted">(based on 3 weeks of activity, confidence 0.8)</span>."</div>
+      <div class="rail"><span class="tag">Confirm</span><span class="tag">Correct</span><span class="tag">Forget</span><span class="tag">Why?</span></div></div>
+    <div class="card" style="border-top:3px solid var(--intel)"><h4>Recommended</h4><p class="muted" style="font-size:12px">A suggestion the system is currently making.</p>
+      <div class="quote" style="font-size:13px;margin:10px 0 6px">"I suggest protecting 18:00–21:00 on weekdays as personal time."</div>
+      <div class="rail"><span class="tag">Accept</span><span class="tag">Not now</span><span class="tag">Never</span></div></div>
+  </div>
+  <div class="split" style="margin-top:14px">
+    <div>
+      <h3>Scopes and layers</h3>
+      <table class="t">
+        <thead><tr><th>Layer</th><th>Contents</th><th>Kind</th></tr></thead>
+        <tbody>
+          <tr><td>Profile</td><td>name, timezone, home location, languages</td><td>known</td></tr>
+          <tr><td>Preferences</td><td>email tone, morning audio, communication style, quiet hours</td><td>known / assumed</td></tr>
+          <tr><td>Goals &amp; projects</td><td>career and personal goals, projects</td><td>known</td></tr>
+          <tr><td>People &amp; dates</td><td>family, close contacts, birthdays</td><td>known</td></tr>
+          <tr><td>Routines</td><td>baselines (confirmed → known)</td><td>assumed → known</td></tr>
+          <tr><td>Knowledge graph</td><td>topics, items, relations</td><td>assumed</td></tr>
+          <tr><td>Episodic</td><td>ledger, observations, audit</td><td>facts</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:12.5px">Every item carries a domain scope. Home agents cannot read <code>work.*</code> and vice versa; only the Mother and Balance agents read across, through the scoped API.</p>
+    </div>
+    <div>
+      <h3>Operations</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>Read (scoped)</td><td>Agents in their own scope; Mother/Balance across</td></tr>
+          <tr><td>Propose</td><td>Any agent → creates an <i>assumed</i> item, never <i>known</i></td></tr>
+          <tr><td>Confirm / correct / forget</td><td>User only, in the trust center or by voice</td></tr>
+          <tr><td>Explain</td><td>"Why do you think that?" → provenance chain: observation → facts → ledger window</td></tr>
+          <tr><td>Export / delete all</td><td><code>GET /api/memory/export</code> · <code>DELETE /api/memory</code></td></tr>
+        </tbody>
+      </table>
+      <div class="callout" style="margin-top:12px"><b>Storage.</b> <code>memory_items</code>: domain, category, key, value (encrypted when sensitivity ≥ sensitive), kind, confidence, provenance, consent link, expiry. Categories map to consents; no consent, no storage.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 11 PRIVACY ============================ -->
+<section id="privacy">
+  <h2><span class="n">11</span>Privacy &amp; security</h2>
+  <p class="lead">Privacy is a layer of the architecture, not a settings page. The existing codebase already has least-privilege tool allowlists, user-scoped artifacts, JWT auth, AWP trust gating and honest empty states. Phase 2 adds what a system holding a person's life requires.</p>
+  <div class="grid g4">
+    <div class="card"><div class="glyph">🪪</div><h4>Identity</h4><p>Google OAuth + JWT today; add passkeys, device list and revoke, separate work/personal identities.</p></div>
+    <div class="card"><div class="glyph">🔐</div><h4>Encryption</h4><p>TLS via Caddy today; add column encryption for sensitive memory, OAuth tokens, health and finance values; keys outside the DB.</p></div>
+    <div class="card"><div class="glyph">🎛</div><h4>Permission management</h4><p>Modes + effect classes + recipes; trust center UI; per-world pause; one global switch.</p></div>
+    <div class="card"><div class="glyph">🧩</div><h4>Agent access control</h4><p>Per-agent MCP allowlists (exists) plus memory scopes and ledger slices; the gate wrapper.</p></div>
+    <div class="card"><div class="glyph">🧱</div><h4>Data isolation</h4><p>Domain scope on every row; cross-domain reads only via Mother/Balance API; no health or finance data reaches work agents.</p></div>
+    <div class="card"><div class="glyph">🧾</div><h4>Audit logs</h4><p>Who (agent), what (tool, effect), on whose approval or recipe, when, undo state. User-visible viewer.</p></div>
+    <div class="card"><div class="glyph">✍️</div><h4>Consent</h4><p>Persisted per category and world (calendar, email content, health, finance, social, location, reading) with purpose; storage refused without it.</p></div>
+    <div class="card"><div class="glyph">⏳</div><h4>Retention</h4><p>Ledger 180 d raw · observations 365 d · audit 2 y · pending 30 d; nightly purge; export-then-delete account.</p></div>
+  </div>
+  <h3>Threat model highlights</h3>
+  <table class="t">
+    <thead><tr><th>Threat</th><th>Control</th></tr></thead>
+    <tbody>
+      <tr><td>An agent reads data it does not need</td><td>Allowlists + memory scopes + domain isolation</td></tr>
+      <tr><td>An action the user did not authorize</td><td>Gate by effect class; pending actions; audit; undo</td></tr>
+      <tr><td>Prompt injection through email or Slack content</td><td>Effects above <code>write_local</code> always need approval unless a <b>coded</b> recipe condition matches; recipes never automate public posts or money</td></tr>
+      <tr><td>Data leak through logs or ledger</td><td>Content-free ledger (hashed subjects); tracing redacts payloads</td></tr>
+      <tr><td>External agent abuse via AWP</td><td>Trust levels + rate limits (exist); external callers capped at Suggest</td></tr>
+      <tr><td>Surveillance drift</td><td>Dimensions opt-in and visible; ledger deletable; observations show their facts</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ 12 JOURNEYS ============================ -->
+<section id="journeys">
+  <h2><span class="n">12</span>Example user journeys</h2>
+  <div class="tabs" id="journeyTabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-p="j1">Morning briefing</button>
+    <button class="tab" role="tab" data-p="j2">"I'm overwhelmed"</button>
+    <button class="tab" role="tab" data-p="j3">Family event vs late work</button>
+    <button class="tab" role="tab" data-p="j4">Routine drift</button>
+    <button class="tab" role="tab" data-p="j5">Email → meeting → prep</button>
+    <button class="tab" role="tab" data-p="j6">"What have I been reading?"</button>
+    <button class="tab" role="tab" data-p="j7">Granting more autonomy</button>
+    <button class="tab" role="tab" data-p="j8">Onboarding</button>
+  </div>
+  <div class="panel open" id="j1">
+    <div class="split">
+      <div class="brief">
+        <div style="font-size:16px;font-weight:700;letter-spacing:-.2px;margin-bottom:6px">GOOD MORNING, JAMES</div>
+        <h5><span style="color:var(--work)">●</span> Work</h5>
+        <ul><li>3 priority tasks — Q3 board memo (due 15:00), review Alex's PR, reply to Mara re: launch date</li><li>2 meetings — Standup 09:30 · Client review 17:30–19:00</li><li>4 important emails — client contract (needs reply), Mara, 2 from finance</li></ul>
+        <h5><span style="color:var(--home)">●</span> Home</h5>
+        <ul><li>Family dinner 18:30 (Sara's birthday)</li><li>Personal task due today: renew passport (postponed 4×)</li></ul>
+        <h5>Learning</h5>
+        <ul><li>Continue "Distributed Systems" — 2 lessons left this week</li><li>Reading: Rust async, 3 evenings this week (↑)</li></ul>
+        <h5>Wellbeing</h5>
+        <ul><li>Break reminder: two 3-hour blocks without a break yesterday</li><li>Sleep 6.2 h avg this week (your usual 7.1 h)</li></ul>
+        <h5>Balance</h5>
+        <ul><li>"Your schedule is relatively work-heavy today: 7.5 h of meetings and one personal commitment at 18:30. The 17:30 client review overlaps Sara's birthday dinner."</li></ul>
+        <h5>Suggested actions</h5>
+        <div class="act"><span>💡 Move the client review to 16:00 (Alex is free)</span><span class="b"><button class="btn primary">Approve</button><button class="btn">Edit</button></span></div>
+        <div class="act"><span>⚡ Afternoon meeting brief prepared</span><span class="b"><button class="btn">Open</button></span></div>
+        <div class="act"><span>💡 Protect 18:00–21:00 as personal time</span><span class="b"><button class="btn primary">Approve</button></span></div>
+        <div class="act"><span>💡 Draft replies to client contract and Mara (2 drafts ready)</span><span class="b"><button class="btn primary">Approve</button><button class="btn">Edit</button></span></div>
+      </div>
+      <div>
+        <h3>Behind the scenes</h3>
+        <ol class="steps">
+          <li>Cron fires at the user's briefing time (Automate, <code>read</code> only). Quiet hours and DND are respected.</li>
+          <li>Mother → Work Mother (Productivity, Email, Team, Project) ‖ Home Mother (Family, Personal Productivity, Health, Entertainment) ‖ Intelligence (Reading, Balance, Digital Behaviour).</li>
+          <li>Arbitration finds the calendar conflict between the 17:30 review and the 18:30 dinner and produces <b>one</b> suggestion.</li>
+          <li>Synthesis in Suzy's voice; each action tagged with its mode so the UI renders Approve vs Open.</li>
+          <li>On the commute, the Entertainment agent reads the briefing aloud and hands over to the morning playlist if enabled.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="j2"><ol class="steps">
+    <li><b>Intake:</b> action · both worlds · urgency high · mode Suggest.</li>
+    <li><b>Context:</b> today's priorities, both calendars, open pending actions, protected time, Balance facts.</li>
+    <li><b>Delegation:</b> Work Productivity proposes deferring non-urgent tasks and one meeting; Personal Productivity moves two errands; Balance proposes a 30-minute break and protecting the evening.</li>
+    <li><b>Arbitration:</b> removes the proposal that would move the board memo (hard deadline, <i>known</i> from email).</li>
+    <li><b>Synthesis:</b> "Here's a lighter day: I'd move the PR review to tomorrow morning, push the two errands to Saturday, and keep 18:00 onward free. The board memo stays. Apply all, or one by one?"</li>
+    <li><b>Gate:</b> three pending actions; "apply all" approves the batch; audit shows each change with undo.</li>
+  </ol></div>
+  <div class="panel" id="j3"><ol class="steps">
+    <li><b>Work Mother</b> notices work ended after 19:00 on 8 of 10 days (pattern).</li>
+    <li><b>Home Mother</b> sees a family event tomorrow at 18:30.</li>
+    <li><b>Balance Agent</b> identifies the conflict and emits one <code>conflict</code> observation with facts and neutral text.</li>
+    <li><b>Mother Agent:</b> "You have a family commitment tomorrow evening, but your current work schedule extends into that period. Would you like me to help reorganize your tasks?"</li>
+    <li>User says yes → Work Productivity proposes moving the 17:30 review; Team Comms drafts a note to attendees (both Suggest). User approves; audit records both under one trace id.</li>
+  </ol></div>
+  <div class="panel" id="j4"><ol class="steps">
+    <li>Day 15 of a new project. The nightly baseline job flags: work end +110 min, reading −70 %, exercise 1× per week, family messages −40 %.</li>
+    <li>The observation waits for the next briefing. It is never a pop-up.</li>
+    <li>"Your routine has changed over the last two weeks. You've been working later than usual and spending less time on your personal activities. Would you like me to help you review what's changed?"</li>
+    <li>User: "Not now." → snoozed 7 days, no further mention.</li>
+    <li>Later: "This is normal for launch month." → baseline re-learns; a <i>known</i> memory notes that launch periods run later.</li>
+  </ol></div>
+  <div class="panel" id="j5"><ol class="steps">
+    <li><b>Email Agent</b> finds "Can we meet Thursday about the renewal?" from a client.</li>
+    <li><b>Productivity</b> checks availability; <b>Balance</b> confirms Thursday 15:00 is inside working hours and outside protected time.</li>
+    <li><b>Team Comms</b> pulls the last thread with the client; <b>Project</b> fetches renewal status.</li>
+    <li><b>Mother Agent:</b> "Propose Thursday 15:00, 45 min. I've drafted the reply and a one-page prep. Send?"</li>
+    <li>One approval sends the reply and creates the event. Two audit rows, one trace id, undo tokens for both.</li>
+  </ol></div>
+  <div class="panel" id="j6"><ol class="steps">
+    <li>User, in the evening: "What have I been reading lately?"</li>
+    <li><b>Reading &amp; Knowledge</b> answers from the graph: "Mostly Rust async runtimes and two long pieces on distributed consensus — five sessions this week, up from two. This connects to the 'Zavora runtime' project."</li>
+    <li>"Want a 10-minute summary of the consensus articles read aloud?" → <b>Entertainment</b> plays it (Suggest → approve).</li>
+  </ol></div>
+  <div class="panel" id="j7"><ol class="steps">
+    <li>The user has approved "archive newsletters" nine times.</li>
+    <li><b>Work Automation</b> proposes a recipe. The trust center shows the exact condition and effect: <code>delete</code>, reversible, 7-day undo window.</li>
+    <li>User approves. The Email agent tile shows ⚡ for that recipe only; every run appears in the audit feed with an Undo button.</li>
+  </ol></div>
+  <div class="panel" id="j8"><ol class="steps">
+    <li>Sign in; choose which worlds to connect: work Google account, personal Google account, Slack, bank (read-only), health CSV.</li>
+    <li>Consent per category with a plain-language purpose.</li>
+    <li>Every agent starts in <b>Observe</b>; the user picks Suggest for a few (Email drafts, Productivity reminders).</li>
+    <li>Baseline warm-up notice: "I'll learn your routine over the next 14 days; nothing is flagged before then."</li>
+    <li>First briefing arrives the next morning.</li>
+  </ol></div>
+</section>
+
+<!-- ============================ 13 AGENT TO AGENT ============================ -->
+<section id="a2a">
+  <h2><span class="n">13</span>Agent-to-agent collaboration</h2>
+  <p class="lead">Agents never call each other directly. All traffic flows through a Mother-mediated message bus with trace ids; worlds aggregate leaf results and forward one result upward. Fan-out depth is capped at two.</p>
+  <div class="grid" style="gap:6px">
+    <div>
+      <h3>Meeting from email</h3>
+      <div class="seq">
+        <div class="m"><span class="who"><i class="sw" style="background:var(--work)"></i>Email</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="txt">observation: "client asks to meet Thu"</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="txt">result: facts + proposed actions</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="txt">request: availability Thu, prep context</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--work)"></i>Productivity · Team</span><span class="txt">request: free slots (read) · last thread (read)</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--intel)"></i>Balance</span><span class="txt">request: boundary check Thu 15:00 → ok</span></div>
+        <div class="m user"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who">User</span><span class="txt">"Propose Thu 15:00? Draft + prep ready."</span></div>
+        <div class="m user"><span class="who">User</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="txt">approve</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--trust)"></i>Gate</span><span class="txt">send_draft · create_event → audit ids, undo tokens</span></div>
+      </div>
+    </div>
+    <div>
+      <h3>Work / home conflict</h3>
+      <div class="seq">
+        <div class="m"><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--intel)"></i>Balance</span><span class="txt">pattern: work end &gt; baseline (8/10 days)</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--home)"></i>Home Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--intel)"></i>Balance</span><span class="txt">upcoming: family event Thu 18:30</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--intel)"></i>Balance</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="txt">conflict observation (facts + neutral text)</span></div>
+        <div class="m user"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who">User</span><span class="txt">"Family commitment tomorrow evening overlaps your work schedule. Reorganize?"</span></div>
+        <div class="m user"><span class="who">User</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="txt">yes</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--work)"></i>Work Mother</span><span class="txt">request: proposals to free 17:30–19:00</span></div>
+        <div class="m"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who"><i class="sw" style="background:var(--home)"></i>Home Mother</span><span class="txt">request: confirm commitment details</span></div>
+        <div class="m user"><span class="who"><i class="sw" style="background:var(--shared)"></i>Mother</span><span class="arrow">→</span><span class="who">User</span><span class="txt">one plan, two pending actions</span></div>
+      </div>
+      <h3>Message envelope</h3>
+<pre><code>{
+  "trace_id": "8f1c…",
+  "from": {"agent": "email", "world": "work"},
+  "to":   {"agent": "work_mother", "world": "work"},
+  "kind": "result",            // request | result | observation | conflict | memory_proposal
+  "domain": "work",
+  "permission_ctx": {"mode": "suggest", "effects_used": ["read"]},
+  "payload": {
+    "summary": "Client asks to meet Thursday about renewal.",
+    "facts": {"thread_hash": "…", "sender_known": true, "urgency": "normal"},
+    "proposed_actions": [
+      {"tool": "create_draft", "effect": "write_local"},
+      {"tool": "send_draft",   "effect": "send_external"}
+    ]
+  }
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 14 COMMAND CENTER ============================ -->
+<section id="ui">
+  <h2><span class="n">14</span>Command center</h2>
+  <p class="lead">The existing spatial card field stays where a delegation unfolds. <b>TODAY</b> is the standing view; the <b>Mother chat</b> is always present; the <b>trust center</b> holds permissions, memory, consents and audit.</p>
+  <div class="today" aria-label="TODAY dashboard mock">
+    <div class="pane"><h6><span class="sw" style="background:var(--work)"></span>Work</h6><ul><li>Priorities (3) · board memo due 15:00</li><li>Meetings: 09:30 · 17:30 ⚠ overlaps dinner</li><li>Important mail (4) · 2 drafts ready</li><li>Team: 3 threads waiting</li></ul></div>
+    <div class="pane"><h6><span class="sw" style="background:var(--home)"></span>Home</h6><ul><li>Family: dinner 18:30 🎂 Sara</li><li>Personal task: passport ↺4</li><li>Wellness: break reminder</li><li>Reading: Rust async ↑</li></ul></div>
+    <div class="pane"><h6>People · agents</h6><ul><li>work: Alex · Priya · Mara</li><li>family: Sara · Mum</li><li>⚡ briefing · 💡 email · 👁 finance · 👁 health</li></ul></div>
+    <div class="pane wide"><h6><span class="sw" style="background:var(--intel)"></span>Balance</h6>"Relatively work-heavy today; the 17:30 review overlaps Sara's birthday dinner." <span class="muted">Would you like me to help reorganize?</span></div>
+    <div class="pane"><h6><span class="sw" style="background:var(--trust)"></span>Approvals (3)</h6><ul><li>💡 Move review to 16:00</li><li>💡 Send 2 drafts</li><li>💡 Protect 18:00–21:00</li></ul></div>
+    <div class="pane wide"><h6>Suggested actions</h6><div class="brief" style="padding:0;border:0;background:none"><div class="act"><span>💡 Move client review to 16:00</span><span class="b"><button class="btn primary">Approve</button><button class="btn">Edit</button><button class="btn">No</button></span></div><div class="act"><span>⚡ Afternoon brief prepared</span><span class="b"><button class="btn">Open</button></span></div></div></div>
+    <div class="pane"><h6>Observations (1)</h6><ul><li>Routine drift, 14 days · <span class="muted">review · snooze</span></li></ul></div>
+    <div class="bar"><span class="orb"></span><span>Ask Suzy — "What do I need to know today?" · "Prepare me for my afternoon."</span><span style="margin-left:auto">🎙 ⏎</span></div>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><h4>Lenses</h4><p>Both · Work · Home. A lens hides the other world's panels and tiles. Domain colour on every card and rail tile; a mode badge (👁 💡 ⚡) on every agent.</p></div>
+    <div class="card"><h4>Approvals inbox</h4><p>Pending actions from any agent, approve singly or in batch, edit re-runs the agent, undo where reversible. Pending actions expire in 48 h and are summarized in the next briefing.</p></div>
+    <div class="card"><h4>Trust center</h4><p>Permissions per agent and per tool; memory tabs known / assumed / recommended; consents; audit feed: "what ran while you were away".</p></div>
+  </div>
+</section>
+
+<!-- ============================ 15 FUTURE ============================ -->
+<section id="future">
+  <h2><span class="n">15</span>Future expansion</h2>
+  <div class="grid g3">
+    <div class="card"><h4>Household mode</h4><p>Several people, one household: shared Family agent, per-person Mother Agents that negotiate dinner time and pickups, over the same bus and AWP.</p></div>
+    <div class="card"><h4>Device layer</h4><p>Phone, watch, car and speaker as surfaces; wearables feed Health &amp; Wellness directly.</p></div>
+    <div class="card"><h4>Local-first</h4><p>Ledger, memory and baseline computed on-device; cloud only for models the device cannot run. The content-free ledger is designed for it.</p></div>
+    <div class="card"><h4>Agent marketplace via AWP</h4><p>Third-party agents (tax, language learning, gardening) join a world under the same contract, allowlists and modes.</p></div>
+    <div class="card"><h4>Employer-managed Work World</h4><p>A company provisions the Work World's tools and policies while the Home World stays entirely the user's.</p></div>
+    <div class="card"><h4>Life-event modes</h4><p>New job, new baby, moving, bereavement: pause drift detection and re-learn baselines with grace.</p></div>
+    <div class="card"><h4>Coaching layer (opt-in)</h4><p>The user's own targets ("exercise 3× a week") tracked in the same neutral voice.</p></div>
+    <div class="card"><h4>Proactive AI radio</h4><p>One commute stream that stitches briefing, news, podcasts and music.</p></div>
+    <div class="card"><h4>Open ledger &amp; memory format</h4><p>Documented export/import so users are never locked in.</p></div>
+  </div>
+</section>
+
+<!-- ============================ 16 SPRINTS ============================ -->
+<section id="sprints">
+  <h2><span class="n">16</span>Sprint plan — 13 sprints, 4 releases</h2>
+  <p class="lead">Two-week sprints (S0 is one week), about 25 working weeks to public beta. Each sprint ends with a product-owner validation script before merge, the same ritual as Phase 1. Click a sprint bar for its goal, tasks and validation.</p>
+  <div class="legend" style="margin-bottom:8px"><span><i style="background:var(--work)"></i>R1 Foundation</span><span><i style="background:var(--home)"></i>R2 Two Worlds</span><span><i style="background:var(--intel)"></i>R3 Intelligence</span><span><i style="background:var(--trust)"></i>R4 Command center &amp; trust</span></div>
+  <div class="viz tl">
+    <svg class="chart" id="timeline" viewBox="0 0 900 470" role="img" aria-labelledby="tlTitle"><title id="tlTitle">Timeline of thirteen sprints across twenty-five weeks in four releases</title></svg>
+  </div>
+  <div class="sprint-detail" id="sprintDetail"></div>
+  <h3>Release goals</h3>
+  <div class="grid g4">
+    <div class="card" style="border-top:3px solid var(--work)"><h4>R1 · Foundation (S0–S3)</h4><p><b>One brain, safe actions, real memory.</b> Mother Agent, content-free ledger, permission gate with pending actions and audit, memory store.</p></div>
+    <div class="card" style="border-top:3px solid var(--home)"><h4>R2 · Two Worlds (S4–S6)</h4><p><b>Two worlds, one briefing.</b> Work and Home mothers with 16 agents, agent bus, two flagship journeys, full daily briefing on cron and voice.</p></div>
+    <div class="card" style="border-top:3px solid var(--intel)"><h4>R3 · Intelligence (S7–S9)</h4><p><b>"It noticed my routine changed."</b> Patterns, personal baseline with warm-up and drift, balance and behaviour, knowledge graph.</p></div>
+    <div class="card" style="border-top:3px solid var(--trust)"><h4>R4 · Command center &amp; trust (S10–S12)</h4><p><b>Public beta.</b> TODAY, Mother chat, approvals, trust center, consent and retention, recipes, AWP entry, onboarding.</p></div>
+  </div>
+  <h3>Planning assumptions</h3>
+  <table class="t">
+    <tbody>
+      <tr><td>Team</td><td>1 tech lead / Rust · 1 Rust agents engineer · 1 frontend · 0.5 designer · product owner. Fewer people: keep scope, extend duration; never cut trust/privacy work.</td></tr>
+      <tr><td>Cadence</td><td>Branch <code>phase2/Sxx-name</code> → tasks → tests and CI green → recorded validation → sign-off → merge and tag <code>v1.x.0-p2</code></td></tr>
+      <tr><td>Definition of done</td><td>Tests; labeled stubs for gaps (no fake data); every write through the gate with an audit row; every table has <code>user_id</code>, domain and a retention rule</td></tr>
+      <tr><td>Illustrative calendar</td><td>Start Mon 2026-10-05 → beta gate Fri 2027-04-09, with a two-week holiday buffer. Shift by the real start.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================ 17 BACKLOG & RISKS ============================ -->
+<section id="backlog">
+  <h2><span class="n">17</span>Backlog, risks and metrics</h2>
+  <div class="split">
+    <div>
+      <h3>Integration gaps (labeled stubs until built)</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>BK-101</td><td>LinkedIn / professional-network MCP</td></tr>
+          <tr><td>BK-102</td><td>Personal social MCPs (Instagram, Facebook, TikTok, X, WhatsApp) — observe first; public posting never automated</td></tr>
+          <tr><td>BK-103</td><td>Contacts MCP replacing vCard import</td></tr>
+          <tr><td>BK-104</td><td>Media MCP (music / podcasts) for AI Radio</td></tr>
+          <tr><td>BK-105</td><td>Tasks provider sync (Google Tasks, Todoist, Reminders)</td></tr>
+          <tr><td>BK-106</td><td>Teams / Discord / WhatsApp Business adapters</td></tr>
+          <tr><td>BK-107</td><td>Wearable / HealthKit live MCP (Phase 1 BK-010)</td></tr>
+          <tr><td>BK-108</td><td>Travel MCP (Phase 1 BK-009)</td></tr>
+          <tr><td>BK-109</td><td>Local-first mode</td></tr>
+        </tbody>
+      </table>
+      <h3>Metrics from R1 onward</h3>
+      <table class="t">
+        <thead><tr><th>Metric</th><th>Target at beta</th></tr></thead>
+        <tbody>
+          <tr><td>p95 first card · chat turn</td><td class="num">&lt; 3 s · &lt; 6 s</td></tr>
+          <tr><td>Turns answered by ≥ 2 agents</td><td class="num">&gt; 40 %</td></tr>
+          <tr><td>Pending-action approval · rejection</td><td class="num">&gt; 60 % · &lt; 15 %</td></tr>
+          <tr><td>Automate undo rate</td><td class="num">&lt; 5 %</td></tr>
+          <tr><td>Drift observations dismissed as wrong</td><td class="num">&lt; 20 %</td></tr>
+          <tr><td>Assumed memory corrected by users</td><td class="num">&lt; 25 %</td></tr>
+          <tr><td>Cross-domain access blocked by the gate</td><td class="num">0 in production</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Risks and mitigations</h3>
+      <table class="t">
+        <tbody>
+          <tr><td>Mother adds latency</td><td>Small model for intake and synthesis; intake cache; parallel delegation; measure p95 in S1 and S12</td></tr>
+          <tr><td>Effect misclassification</td><td>Boot fails on a missing effect; PR checklist per MCP server; injection tests; unknown → most restrictive</td></tr>
+          <tr><td>Prompt injection via content</td><td>Effects above <code>write_local</code> need approval unless a coded recipe matches; never automate public posts or money</td></tr>
+          <tr><td>Baseline false positives</td><td>14-day warm-up, MAD floors, meaningful rule, cooldown, dismiss feedback, per-dimension toggles</td></tr>
+          <tr><td>Perceived surveillance</td><td>Content-free ledger, visible dimensions, deletable data, observations show facts, never push</td></tr>
+          <tr><td>MCP gaps make agents look thin</td><td>Labeled stubs and import paths; roadmap honesty in the UI</td></tr>
+          <tr><td>Cost per user</td><td>Token budgets, model routing, briefing on cron and cached, deterministic intelligence</td></tr>
+          <tr><td>Smaller team than assumed</td><td>Releases are cut-lines: R1 + R2 alone is a coherent product</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 18 SOURCES ============================ -->
+<section id="sources">
+  <h2><span class="n">18</span>Sources and full documents</h2>
+  <p>This artifact summarizes two longer documents written against the zavora-os codebase at commit <code>228ec78</code> (2026-06-23). The code was read, not built; the crate depends on sibling checkouts that were not available.</p>
+  <div class="footer-links">
+    <a href="https://github.com/zavora-ai/zavora-os/pull/1" target="_blank" rel="noopener">Pull request #1 — docs added to zavora-os</a>
+    <a href="https://github.com/swiftkimani/zavora-os/blob/docs/personal-ai-os-concept/docs/PERSONAL_AI_OS.md" target="_blank" rel="noopener">PERSONAL_AI_OS.md (concept, ~1,300 lines)</a>
+    <a href="https://github.com/swiftkimani/zavora-os/blob/docs/personal-ai-os-concept/docs/SPRINT_PLAN.md" target="_blank" rel="noopener">SPRINT_PLAN.md (13 sprints)</a>
+    <a href="https://github.com/zavora-ai/zavora-os" target="_blank" rel="noopener">zavora-ai/zavora-os</a>
+  </div>
+  <p class="muted" style="font-size:12px;margin-top:16px">Zavora Personal AI OS · Concept v1.0 · 2026-09-19. Chart data in sections 07, 08 and 16 is illustrative.</p>
+</section>
+</main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const tip = $('#tip');
+
+  /* ---------- tooltip ---------- */
+  function showTip(evt, title, rows) {
+    tip.replaceChildren();
+    const b = document.createElement('b'); b.textContent = title; tip.appendChild(b);
+    rows.forEach(r => {
+      const row = document.createElement('div'); row.className = 'row';
+      if (r.color) { const k = document.createElement('i'); k.className = 'key'; k.style.background = r.color; row.appendChild(k); }
+      const v = document.createElement('span'); v.textContent = r.value; v.style.fontWeight = '600'; v.style.color = 'var(--ink)'; row.appendChild(v);
+      const l = document.createElement('span'); l.textContent = r.label; l.style.color = 'var(--muted)'; row.appendChild(l);
+      tip.appendChild(row);
+    });
+    tip.style.display = 'block'; moveTip(evt);
+  }
+  function moveTip(evt) {
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = evt.clientX + pad, y = evt.clientY + pad;
+    if (x + w > window.innerWidth - 8) x = evt.clientX - w - pad;
+    if (y + h > window.innerHeight - 8) y = evt.clientY - h - pad;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hideTip() { tip.style.display = 'none'; }
+  function bindTip(el, title, rows) {
+    el.addEventListener('pointerenter', e => showTip(e, title, rows));
+    el.addEventListener('pointermove', moveTip);
+    el.addEventListener('pointerleave', hideTip);
+    el.addEventListener('focus', e => { const r = el.getBoundingClientRect(); showTip({clientX: r.right, clientY: r.top}, title, rows); });
+    el.addEventListener('blur', hideTip);
+  }
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, text) {
+    const n = document.createElementNS(SVGNS, tag);
+    Object.entries(attrs || {}).forEach(([k, v]) => n.setAttribute(k, v));
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function roundedBar(x, y, w, h, r, dir) {
+    // rounded at the data end only, square at the baseline. dir: 'right' | 'left' | 'up'
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    if (dir === 'right') return `M${x},${y} h${w - r} a${r},${r} 0 0 1 ${r},${r} v${h - 2*r} a${r},${r} 0 0 1 -${r},${r} h-${w - r} z`;
+    if (dir === 'left')  return `M${x + w},${y} h-${w - r} a${r},${r} 0 0 0 -${r},${r} v${h - 2*r} a${r},${r} 0 0 0 ${r},${r} h${w - r} z`;
+    return `M${x},${y + h} v-${h - r} a${r},${r} 0 0 1 ${r},-${r} h${w - 2*r} a${r},${r} 0 0 1 ${r},${r} v${h - r} z`;
+  }
+  function tableFrom(container, head, rows) {
+    const t = document.createElement('table'); t.className = 't';
+    const thead = document.createElement('thead'); const tr = document.createElement('tr');
+    head.forEach(h => { const th = document.createElement('th'); th.textContent = h; tr.appendChild(th); });
+    thead.appendChild(tr); t.appendChild(thead);
+    const tb = document.createElement('tbody');
+    rows.forEach(r => { const tr2 = document.createElement('tr'); r.forEach((c, i) => { const td = document.createElement('td'); td.textContent = c; if (i > 0) td.className = 'num'; tr2.appendChild(td); }); tb.appendChild(tr2); });
+    t.appendChild(tb); container.replaceChildren(t);
+  }
+  $$('[data-table]').forEach(btn => btn.addEventListener('click', () => {
+    const w = document.getElementById(btn.dataset.table); const open = w.classList.toggle('open');
+    btn.textContent = open ? 'Hide table' : 'Show table';
+  }));
+
+  /* ---------- scroll spy ---------- */
+  const links = $$('nav.side a[href^="#"]');
+  const byId = Object.fromEntries(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => { if (en.isIntersecting) { links.forEach(a => a.classList.remove('active')); const a = byId[en.target.id]; if (a) a.classList.add('active'); } });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  $$('main section[id]').forEach(s => io.observe(s));
+
+  /* ---------- architecture detail ---------- */
+  const ARCH = {
+    ui: ['Surface: Field UI, TODAY, trust center', 'The existing spatial card field (cards, VerbUI gestures, People/Live/Agent rails) stays as the place a delegation unfolds. Phase 2 adds the TODAY dashboard, a persistent Mother chat panel, an approvals inbox and the trust center.', 'web/index.html · web/static/field-client.js → today.js, mother-chat.js, trust-center.js (S10, S11)'],
+    voice: ['Surface: Suzy live voice', 'Gemini Live over WebSocket already exposes submit_intent and get_session_context tools; Phase 2 points both at the Mother Agent so voice and text share one brain. Reads the daily briefing aloud.', 'src/voice/realtime.rs (S1, S6)'],
+    awp: ['Surface: AWP, external agents', 'External agents discover capabilities via business.toml and reach the same orchestrator through POST /awp/a2a. Trust levels (Anonymous / Known / Partner) and rate limits exist today; Phase 2 caps external callers at Suggest-mode outcomes.', 'src/awp_gate.rs · business.toml (S1, S12)'],
+    mother: ['Mother Agent (Suzy voice)', 'Single orchestrator: intake → context → delegation → arbitration → synthesis → action gate. No MCP tools of its own; internal tools only. Replaces today’s router + summarizer pair.', 'src/agents/suzy.rs + router.rs → src/mother/{intake,agent,delegate,arbitrate,synth,bus}.rs (S1, S6)'],
+    work: ['Work World · Work Mother', 'Coordinates 8 work agents: Productivity, Email, Team Communication, Project, Career, Research & Knowledge, Professional Social Media, Work Automation. Owns work identities and the work.* memory scope. Default posture: Suggest for anything that leaves the machine.', 'src/worlds/work.rs · src/agents/work/*.rs (S4)'],
+    home: ['Home World · Home Mother', 'Coordinates 8 home agents: Family, Personal Productivity, Health & Wellness, Personal Finance, AI Radio / Entertainment, Social & Fun, Personal Social Media, Travel & Errands. Separate personal identity. Default posture: Observe for anything sensitive.', 'src/worlds/home.rs · src/agents/home/*.rs (S5)'],
+    ledger: ['Activity ledger', 'Append-only, content-free record of every intent, tool call, card resolve, approval, observation and user action, tagged with domain and effect. Subjects hashed; retention 180 days raw.', 'src/intelligence/ledger.rs · activity_events (S2)'],
+    patterns: ['Pattern recognition & digital behaviour', 'Deterministic aggregations: working hours, reading, communication, productivity, social usage, sleep/routine, repeated and postponed tasks, context switching, notification load, long blocks.', 'src/intelligence/{patterns,behavior}.rs (S7, S8)'],
+    baseline: ['Personal baseline', 'Rolling 28-day median + MAD per dimension, 14-day warm-up, drift detector with cooldown, user confirmation turns learned routines into known memory.', 'src/intelligence/baseline.rs · baselines, observations (S7)'],
+    balance: ['Balance Agent', 'Compares work and home attention, spillover, boundary crossings, postponement debt, family cadence; detects cross-calendar conflicts; emits one neutral observation with an offer.', 'src/intelligence/balance.rs (S8)'],
+    knowledge: ['Reading & Knowledge', 'Reading ledger plus knowledge graph (topics → items → projects → goals); answers "what have I been reading?"; feeds the Learning section and the Career agent.', 'src/intelligence/knowledge.rs (S9)'],
+    memory: ['Personal memory', 'known / assumed / recommended items with domain scope, provenance, confidence, consent link, expiry; sensitive values encrypted; user can confirm, correct, forget, export, delete all.', 'src/memory/ · memory_items (S3, S11)'],
+    gate: ['Permission gate', 'Toolset wrapper that decides by agent mode × tool effect: pass, enqueue pending action, or deny. Public posts and money are never automatable.', 'src/permissions/gate.rs · mcp_allowlists.toml gains mode + effects (S2, S12)'],
+    pending: ['Pending actions', 'Proposed effects awaiting approval: approve, edit, reject, batch; 48-hour expiry; undo tokens where reversible. Today’s POST /commit becomes a thin wrapper.', 'src/routes/actions.rs · pending_actions (S2)'],
+    audit: ['Audit log', 'Immutable record of every executed effect: agent, tool, effect, approval or recipe id, timestamp, undo state. Visible in the trust center as "what ran while you were away".', 'audit_log · src/routes/audit.rs (S2, S11)'],
+    privacy: ['Privacy controls', 'Identity (OAuth, JWT, passkeys), column encryption, consent persistence per category and world, retention policies with nightly purge, domain isolation, export-then-delete.', 'src/auth.rs · src/memory/{crypto,consent}.rs · retention_policies (S3, S11)'],
+    mcp: ['Real world: MCP toolservers', 'Fourteen MCP servers already wired (calendar, email, news, weather, Slack, CRM, banking, GitHub, maps, real estate, market data, spreadsheets, documents, slides). Gaps (LinkedIn, social, contacts, media, travel) ship as labeled stubs.', 'src/tools/mcp.rs · mcp_allowlists.toml']
+  };
+  const archDetail = $('#archDetail');
+  $$('#arch .node').forEach(n => n.addEventListener('click', () => {
+    $$('#arch .node').forEach(o => o.setAttribute('aria-pressed', 'false'));
+    n.setAttribute('aria-pressed', 'true');
+    const d = ARCH[n.dataset.node]; if (!d) return;
+    archDetail.replaceChildren();
+    const b = document.createElement('b'); b.textContent = d[0]; archDetail.appendChild(b);
+    const p = document.createElement('div'); p.textContent = d[1]; p.style.marginTop = '4px'; archDetail.appendChild(p);
+    const c = document.createElement('div'); c.className = 'muted'; c.style.marginTop = '6px'; c.style.fontSize = '12px'; c.textContent = 'Code: ' + d[2]; archDetail.appendChild(c);
+  }));
+
+  /* ---------- agent catalog ---------- */
+  const AGENTS = [
+    { id:'mother', name:'Mother Agent', g:'✦', world:'shared', status:'new', today:'suzy_coordinator + intent_router', mcp:'none (internal tools)', mode:'—', mission:'Context, routing, delegation, arbitration, synthesis. Suzy is its voice.' },
+    { id:'work_mother', name:'Work Mother', g:'🏢', world:'work', status:'new', today:'—', mcp:'none', mode:'Suggest', mission:'Coordinates all professional agents; owns work identities and memory scope.' },
+    { id:'home_mother', name:'Home Mother', g:'🏠', world:'home', status:'new', today:'—', mcp:'none', mode:'Observe', mission:'Coordinates personal, family and everyday-life agents; separate personal identity.' },
+    { id:'productivity', name:'Productivity', g:'🗓', world:'work', status:'extend', today:'calendar_agent', mcp:'calendar · tasks store', mode:'Suggest', mission:'Tasks, calendar, meetings, deadlines, planning, reminders, focus sessions, daily and weekly plan.' },
+    { id:'email', name:'Email', g:'✉️', world:'work', status:'extend', today:'inbox_agent', mcp:'email', mode:'Observe → Suggest', mission:'Categorize, draft, summarize threads, flag urgent, track unanswered, schedule sends.' },
+    { id:'team_comms', name:'Team Communication', g:'💬', world:'work', status:'extend', today:'team_agent · priya_agent', mcp:'slack · calendar', mode:'Observe → Suggest', mission:'Slack/Teams: channel monitoring, mentions, summaries, follow-ups, meeting coordination, 1:1 prep.' },
+    { id:'project', name:'Project', g:'📁', world:'work', status:'extend', today:'focus_agent', mcp:'github · slack · crm', mode:'Observe → Suggest', mission:'Status, milestones, responsibilities, risks, dependencies, progress reports.' },
+    { id:'career', name:'Career', g:'🎯', world:'work', status:'new', today:'—', mcp:'memory · crm (LinkedIn gap)', mode:'Observe → Suggest', mission:'Goals, skills, opportunities, CV, certifications, learning plans, networking.' },
+    { id:'research', name:'Research & Knowledge', g:'📚', world:'work', status:'extend', today:'research_agent (ambient)', mcp:'news · search', mode:'Observe', mission:'Research, reading, documentation, knowledge organization, summaries.' },
+    { id:'prof_social', name:'Professional Social Media', g:'💼', world:'work', status:'new', today:'—', mcp:'LinkedIn MCP gap (labeled stub)', mode:'Observe', mission:'Mentions, post suggestions, content calendar, networking opportunities.' },
+    { id:'work_auto', name:'Work Automation', g:'⚙️', world:'work', status:'extend', today:'deck workflow (excel/docs/slides/combine)', mcp:'worksheet · docx · slides · ledger', mode:'Suggest → Automate', mission:'Detects repetitive tasks, proposes recipes, runs authorized automations, builds documents and reports.' },
+    { id:'family', name:'Family', g:'🏡', world:'home', status:'new', today:'family rail (empty state)', mcp:'calendar · contacts (gap)', mode:'Observe → Suggest', mission:'Family communication, important dates, events, household coordination, shared responsibilities.' },
+    { id:'personal_prod', name:'Personal Productivity', g:'✅', world:'home', status:'new', today:'—', mcp:'calendar · maps · tasks store', mode:'Suggest', mission:'Personal tasks, calendar, errands, reminders, projects, routines, goals.' },
+    { id:'health', name:'Health & Wellness', g:'💪', world:'home', status:'extend', today:'health_agent (CSV)', mcp:'HealthKit/CSV import', mode:'Observe', mission:'Exercise, sleep, habits, appointments, medication reminders. Never diagnoses; escalates to professionals.' },
+    { id:'personal_social', name:'Personal Social Media', g:'📱', world:'home', status:'new', today:'—', mcp:'social MCPs gap (labeled stub)', mode:'Observe', mission:'Content organization, posting assistance, notifications, presence monitoring.' },
+    { id:'entertainment', name:'AI Radio / Entertainment', g:'📻', world:'home', status:'extend', today:'headlines · now · markets · maker', mcp:'news · media (gap)', mode:'Observe → Suggest', mission:'Music, podcasts, news, audiobooks, personalized radio, commute listening. Learns taste without intruding.' },
+    { id:'finance', name:'Personal Finance', g:'💸', world:'home', status:'extend', today:'money_agent', mcp:'banking (read-only tools)', mode:'Observe', mission:'Budgets, spending, bills, savings goals, subscriptions, reminders. Information only; never moves money.' },
+    { id:'social_fun', name:'Social & Fun', g:'🎲', world:'home', status:'extend', today:'maker_agent', mcp:'news · maps · weather', mode:'Suggest', mission:'Jokes, games, conversation, memes, weekend ideas. Makes the OS feel like a companion.' },
+    { id:'travel', name:'Travel & Errands', g:'✈️', world:'home', status:'extend', today:'planner · stay · flights (stub)', mcp:'maps · weather · real estate', mode:'Suggest', mission:'Trip planning, itineraries, stays, routes.' },
+    { id:'patterns', name:'Pattern Recognition', g:'📈', world:'intel', status:'new', today:'—', mcp:'ledger', mode:'Observe', mission:'Deterministic aggregations over the ledger; nightly plus incremental.' },
+    { id:'baseline', name:'Personal Baseline', g:'📐', world:'intel', status:'new', today:'—', mcp:'ledger', mode:'Observe', mission:'Learns normal per dimension; drift detection with warm-up and cooldown.' },
+    { id:'balance', name:'Balance', g:'⚖️', world:'intel', status:'new', today:'—', mcp:'ledger · calendars', mode:'Observe', mission:'Work vs home attention; conflicts; boundaries. Informs and suggests only.' },
+    { id:'behavior', name:'Digital Behaviour', g:'🔔', world:'intel', status:'new', today:'—', mcp:'ledger', mode:'Observe', mission:'Context switching, notification load, long blocks, distractions, social consumption.' },
+    { id:'knowledge', name:'Reading & Knowledge', g:'🧠', world:'intel', status:'new', today:'—', mcp:'ledger · news · artifacts', mode:'Observe', mission:'Reading ledger and knowledge graph.' },
+    { id:'briefing', name:'Daily Briefing', g:'🌅', world:'shared', status:'extend', today:'morning workflow · greeting agent', mcp:'via both mothers', mode:'Automate (read-only)', mission:'Work · Home · Learning · Wellbeing · Balance · Suggested actions, prepared on cron.' }
+  ];
+  const grid = $('#agentGrid');
+  const STATUS = { new: 'New in Phase 2', extend: 'Extends existing code', keep: 'Kept' };
+  function renderAgents(filter) {
+    grid.replaceChildren();
+    const list = AGENTS.filter(a => filter === 'all' ? true : (filter === 'new' || filter === 'extend') ? a.status === filter : a.world === filter);
+    list.forEach(a => {
+      const c = document.createElement('div'); c.className = 'card agent'; c.dataset.world = a.world;
+      c.style.borderTop = '3px solid var(--' + a.world + ')';
+      const g = document.createElement('div'); g.className = 'g'; g.textContent = a.g; c.appendChild(g);
+      const body = document.createElement('div');
+      const h = document.createElement('h4'); h.textContent = a.name; body.appendChild(h);
+      const p = document.createElement('p'); p.textContent = a.mission; body.appendChild(p);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const tags = [['Mode', a.mode], ['MCP', a.mcp], ['Today', a.today]];
+      tags.forEach(([k, v]) => { const s = document.createElement('span'); s.className = 'status'; s.textContent = k + ': ' + v; meta.appendChild(s); });
+      const st = document.createElement('span'); st.className = 'status'; st.textContent = STATUS[a.status]; st.style.color = 'var(--ink)'; meta.appendChild(st);
+      body.appendChild(meta); c.appendChild(body); grid.appendChild(c);
+    });
+    $('#cntAll').textContent = '(' + AGENTS.length + ')';
+  }
+  renderAgents('all');
+  $$('#agentFilters .chip').forEach(ch => ch.addEventListener('click', () => {
+    $$('#agentFilters .chip').forEach(o => o.setAttribute('aria-pressed', 'false'));
+    ch.setAttribute('aria-pressed', 'true'); renderAgents(ch.dataset.f);
+  }));
+
+  /* ---------- baseline deviation chart ---------- */
+  const BASE = [
+    { dim: 'Work time per day', base: '8.5 h', obs: '10.0 h', pct: 18 },
+    { dim: 'Work end time', base: '17:30', obs: '19:20', pct: 21 },
+    { dim: 'Personal tasks postponed', base: '2 / wk', obs: '5 / wk', pct: 150 },
+    { dim: 'Family messages', base: '24 / wk', obs: '14 / wk', pct: -40 },
+    { dim: 'Reading time', base: '30 min / day', obs: '9 min / day', pct: -70 },
+    { dim: 'Exercise sessions', base: '3 / wk', obs: '1 / wk', pct: -67 },
+    { dim: 'Sleep duration', base: '7.1 h', obs: '6.5 h', pct: -8 }
+  ];
+  (function baselineChart() {
+    const svg = $('#baselineChart'); const W = 560, H = 300, L = 170, R = 46, T = 14, B = 30;
+    const plotW = W - L - R, max = 160, min = -100;
+    const x = v => L + (v - min) / (max - min) * plotW;
+    const rowH = (H - T - B) / BASE.length, barH = Math.min(18, rowH - 8);
+    [-100, -50, 0, 50, 100, 150].forEach(v => {
+      svg.appendChild(el('line', { x1: x(v), x2: x(v), y1: T, y2: H - B, class: v === 0 ? 'axis' : 'grid' }));
+      svg.appendChild(el('text', { x: x(v), y: H - B + 16, class: 'tick', 'text-anchor': 'middle' }, (v > 0 ? '+' : '') + v + '%'));
+    });
+    BASE.forEach((d, i) => {
+      const y = T + i * rowH + (rowH - barH) / 2;
+      svg.appendChild(el('text', { x: L - 10, y: y + barH / 2 + 4, class: 'lab', 'text-anchor': 'end' }, d.dim));
+      const x0 = x(0), x1 = x(d.pct), w = Math.abs(x1 - x0);
+      const path = el('path', { d: d.pct >= 0 ? roundedBar(x0, y, w, barH, 4, 'right') : roundedBar(x1, y, w, barH, 4, 'left'), fill: css('--work'), class: 'bar', tabindex: '0', role: 'img', 'aria-label': d.dim + ' ' + (d.pct > 0 ? '+' : '') + d.pct + ' percent vs baseline' });
+      svg.appendChild(path);
+      const lx = d.pct >= 0 ? x1 + 6 : x1 - 6;
+      svg.appendChild(el('text', { x: lx, y: y + barH / 2 + 4, class: 'val', 'text-anchor': d.pct >= 0 ? 'start' : 'end' }, (d.pct > 0 ? '+' : '') + d.pct + '%'));
+      bindTip(path, d.dim, [{ value: d.obs, label: 'last 14 days' }, { value: d.base, label: 'your baseline (28 d)' }, { value: (d.pct > 0 ? '+' : '') + d.pct + '%', label: 'deviation' }]);
+    });
+    tableFrom($('#baselineTable'), ['Dimension', 'Baseline (28 d)', 'Last 14 days', 'Deviation'], BASE.map(d => [d.dim, d.base, d.obs, (d.pct > 0 ? '+' : '') + d.pct + '%']));
+  })();
+
+  /* ---------- balance stacked chart ---------- */
+  const WEEK = [
+    { day: 'Mon', work: 540, home: 120 }, { day: 'Tue', work: 570, home: 90 }, { day: 'Wed', work: 600, home: 60 },
+    { day: 'Thu', work: 615, home: 45 }, { day: 'Fri', work: 555, home: 120 }, { day: 'Sat', work: 60, home: 300 }, { day: 'Sun', work: 0, home: 360 }
+  ];
+  (function balanceChart() {
+    const svg = $('#balanceChart'); const W = 560, H = 290, L = 48, R = 60, T = 14, B = 30;
+    const plotW = W - L - R, max = 720, x = v => L + v / max * plotW;
+    const rowH = (H - T - B) / WEEK.length, barH = Math.min(20, rowH - 10), gap = 2;
+    [0, 120, 240, 360, 480, 600, 720].forEach(v => {
+      svg.appendChild(el('line', { x1: x(v), x2: x(v), y1: T, y2: H - B, class: v === 0 ? 'axis' : 'grid' }));
+      svg.appendChild(el('text', { x: x(v), y: H - B + 16, class: 'tick', 'text-anchor': 'middle' }, (v / 60) + 'h'));
+    });
+    const workC = css('--work'), homeC = css('--home'), surface = css('--surface');
+    WEEK.forEach((d, i) => {
+      const y = T + i * rowH + (rowH - barH) / 2;
+      svg.appendChild(el('text', { x: L - 10, y: y + barH / 2 + 4, class: 'lab', 'text-anchor': 'end' }, d.day));
+      let cx = x(0);
+      const segs = [['Work', d.work, workC], ['Home', d.home, homeC]];
+      segs.forEach(([name, v, color], si) => {
+        if (v <= 0) return;
+        const w = x(v) - x(0), isLast = (si === 1) || d.home <= 0;
+        const x0 = si === 0 ? cx : cx + gap, ww = si === 0 ? w - (d.home > 0 ? gap : 0) : w - gap;
+        const shape = isLast ? el('path', { d: roundedBar(x0, y, Math.max(ww, 4), barH, 4, 'right'), fill: color, class: 'bar', tabindex: '0', role: 'img', 'aria-label': d.day + ' ' + name + ' ' + v + ' minutes' })
+                             : el('rect', { x: x0, y, width: Math.max(ww, 2), height: barH, fill: color, class: 'bar', tabindex: '0', role: 'img', 'aria-label': d.day + ' ' + name + ' ' + v + ' minutes' });
+        svg.appendChild(shape);
+        bindTip(shape, d.day, [{ value: (d.work / 60).toFixed(1) + ' h', label: 'work', color: workC }, { value: (d.home / 60).toFixed(1) + ' h', label: 'home', color: homeC }, { value: ((d.work + d.home) / 60).toFixed(1) + ' h', label: 'total' }]);
+        cx += w;
+      });
+      svg.appendChild(el('text', { x: cx + 8, y: y + barH / 2 + 4, class: 'val' }, ((d.work + d.home) / 60).toFixed(1) + ' h'));
+    });
+    // reference: usual work day 8.5 h (baseline), drawn as a hairline
+    const ref = x(510);
+    svg.appendChild(el('line', { x1: ref, x2: ref, y1: T - 4, y2: T + rowH * 5 - 2, stroke: css('--muted'), 'stroke-width': 1.5 }));
+    svg.appendChild(el('text', { x: ref + 4, y: T + 6, class: 'tick' }, 'usual 8.5 h'));
+    tableFrom($('#balanceTable'), ['Day', 'Work', 'Home', 'Total'], WEEK.map(d => [d.day, (d.work / 60).toFixed(1) + ' h', (d.home / 60).toFixed(1) + ' h', ((d.work + d.home) / 60).toFixed(1) + ' h']));
+    void surface;
+  })();
+
+  /* ---------- permission gate widget ---------- */
+  const OUT = {
+    read: { observe: ['ok', 'Runs and is logged. Observe mode permits every read.'], suggest: ['ok', 'Runs and is logged.'], automate: ['ok', 'Runs and is logged.'] },
+    write_local: { observe: ['no', 'Denied. The agent is told: "not permitted in observe mode"; it can describe what it would draft.'], suggest: ['ok', 'Runs immediately: a draft or artifact stays inside the OS until a further action sends it.'], automate: ['ok', 'Runs immediately and is audited.'] },
+    schedule_with_others: { observe: ['no', 'Denied.'], suggest: ['pend', 'Queued as a pending action: "Create event with 2 attendees" appears in the approvals inbox.'], automate: ['recipe', 'Runs and is audited with an undo token', 'Queued as a pending action: no approved recipe covers this action.'] },
+    send_external: { observe: ['no', 'Denied.'], suggest: ['pend', 'Queued as a pending action: the reply is drafted and waits for Approve / Edit / Reject.'], automate: ['recipe', 'Runs and is audited with an undo token (recall window where the provider supports it)', 'Queued as a pending action: no approved recipe covers this send.'] },
+    delete: { observe: ['no', 'Denied.'], suggest: ['pend', 'Queued as a pending action, marked reversible.'], automate: ['recipe', 'Runs, audited, undo available for the recipe window (e.g. 7 days)', 'Queued as a pending action: no approved recipe.'] },
+    publish_public: { observe: ['no', 'Denied.'], suggest: ['pend', 'Queued as a pending action with a preview of the post.'], automate: ['no', 'Never automated. Public posting always needs an explicit approval, regardless of recipes.'] },
+    financial: { observe: ['no', 'Denied.'], suggest: ['pend', 'Queued as a pending action with a confirmation step.'], automate: ['no', 'Never automated. Money never moves without an explicit approval.'] }
+  };
+  const gMode = $('#gMode'), gEffect = $('#gEffect'), gRecipe = $('#gRecipe'), gOut = $('#gOut');
+  function renderGate() {
+    const r = OUT[gEffect.value][gMode.value]; let kind = r[0], text = r[1];
+    if (kind === 'recipe') { if (gRecipe.checked) { kind = 'ok'; } else { kind = 'pend'; text = r[2]; } }
+    const label = { ok: '✓ Executes', pend: '… Pending approval', no: '✕ Denied' }[kind];
+    const color = { ok: 'var(--good)', pend: 'var(--warn)', no: 'var(--crit)' }[kind];
+    gOut.replaceChildren();
+    const b = document.createElement('b'); b.textContent = label; b.style.color = 'var(--ink)';
+    const dot = document.createElement('span'); dot.style.cssText = 'display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle;background:' + color;
+    const head = document.createElement('div'); head.appendChild(dot); head.appendChild(b); gOut.appendChild(head);
+    const p = document.createElement('div'); p.textContent = text; p.style.marginTop = '4px'; gOut.appendChild(p);
+    const a = document.createElement('div'); a.className = 'muted'; a.style.cssText = 'font-size:12px;margin-top:6px'; a.textContent = 'Audit: every executed effect writes an audit row; denied and pending decisions are logged in the ledger.'; gOut.appendChild(a);
+    gRecipe.parentElement.style.opacity = gMode.value === 'automate' ? '1' : '.45';
+  }
+  [gMode, gEffect, gRecipe].forEach(x => x.addEventListener('change', renderGate)); renderGate();
+
+  /* ---------- journeys tabs ---------- */
+  $$('#journeyTabs .tab').forEach(t => t.addEventListener('click', () => {
+    $$('#journeyTabs .tab').forEach(o => o.setAttribute('aria-selected', 'false')); t.setAttribute('aria-selected', 'true');
+    $$('#journeys .panel').forEach(p => p.classList.remove('open')); $('#' + t.dataset.p).classList.add('open');
+  }));
+
+  /* ---------- sprint timeline ---------- */
+  const SPRINTS = [
+    { id: 'S0', name: 'Align & scaffold', wk: [1, 1], rel: 1, goal: 'Reconcile the stale Phase 1 progress table with the code; ADRs; domain model; module skeletons; synthetic activity generator; Postgres in CI.', tasks: ['S0-T1 Reconcile IMPLEMENTATION_PLAN.md (M5–M11)', 'S0-T2 ADRs: Mother Agent · domain model · permission modes · content-free ledger', 'S0-T3 Domain enum on cards, agents, SSE', 'S0-T5 AgentSpec + backward-compatible allowlist schema', 'S0-T6 scripts/synth_ledger.py with a drift scenario', 'S0-T7 Postgres service in GitHub Actions'], val: ['cargo test and CI green with Postgres', '/health shows phase P2-S0', 'allowlist parses with and without new fields'] },
+    { id: 'S1', name: 'Mother Agent v1', wk: [2, 3], rel: 1, goal: 'One orchestrator (intake → delegate → synthesize) behind chat, voice and A2A while the seven scenarios keep working.', tasks: ['S1-T1 src/mother/intake.rs → structured IntakeResult', 'S1-T2 mother_agent with internal MotherToolset, no MCP', 'S1-T3 delegation adapter to existing runners', 'S1-T4 multi-result synthesis in Suzy voice', 'S1-T5 POST /api/sessions/{sid}/chat (SSE)', 'S1-T6 dispatch_intent and /awp/a2a via Mother', 'S1-T7 voice tools → Mother'], val: ['"What\'s happening with work?" fans out to ≥ 2 agents, one summary', 'Deck and the full tour unchanged', 'Ambiguous intent → one clarifying question'] },
+    { id: 'S2', name: 'Ledger + permission modes', wk: [4, 5], rel: 1, goal: 'Content-free activity ledger; Observe / Suggest / Automate gate at the tool boundary; pending actions; audit; pause switch.', tasks: ['S2-T1 activity_events + LedgerService', 'S2-T2 instrument tool calls, resolves, approvals, UI counts', 'S2-T4 effect class required for every allowlisted tool (boot fails otherwise)', 'S2-T5 PermissionGate toolset wrapper', 'S2-T6 agent_permissions · pending_actions · audit_log', 'S2-T7 actions API + SSE permission_request / action_result', 'S2-T8 permissions API + POST /api/pause'], val: ['Email in Suggest: drafts created, nothing sent, approval inbox shows "Send 2 replies"', 'Approve → sent, audit row with effect send_external', 'Ledger contains no content'] },
+    { id: 'S3', name: 'Personal memory v1', wk: [6, 7], rel: 1, goal: 'known / assumed / recommended store with provenance, scopes, encryption for sensitive values, and a user-controlled API.', tasks: ['S3-T1 memory_items + minimal consents', 'S3-T2 MemoryService: read, propose, confirm, correct, forget, export, purge; AES-GCM', 'S3-T3 read_memory / propose_memory tools with scopes', 'S3-T5 GET/PATCH/DELETE /api/memory, export', 'S3-T6 replace hardcoded facts (home city, country)', 'S3-T7 synthesis cites kind'], val: ['"Remember I never take meetings before 10" → known preference', 'Home agent cannot read work.* (test)', 'DB dump shows ciphertext for sensitive values'] },
+    { id: 'S4', name: 'Work World', wk: [8, 9], rel: 2, goal: 'work_mother plus eight work agents: five extended from today, three new (two as labeled stubs).', tasks: ['S4-T1 src/worlds/work.rs', 'S4-T2 re-home productivity, email, team_comms, project, research_knowledge, work_automation', 'S4-T3 tasks table + Productivity tools', 'S4-T4 Email: categorize, urgent, follow-up tracker, scheduled send', 'S4-T5 Career agent', 'S4-T6 Professional Social (labeled stub, BK-101)', 'S4-T8 work People rail, domain colour'], val: ['"What\'s happening with work?" → Productivity, Email, Team, Project cards, one synthesis', 'Follow-up tracker flags a 3-day-old thread', 'Stubs are labeled, not fake'] },
+    { id: 'S5', name: 'Home World', wk: [10, 11], rel: 2, goal: 'home_mother plus eight home agents with conservative defaults: finance read-only, health never diagnoses, social observe-only; separate personal identity.', tasks: ['S5-T1 src/worlds/home.rs', 'S5-T2 re-home finance, health_wellness, entertainment, social_fun, travel', 'S5-T3 Family agent: family calendar, contacts import, dates, household tasks', 'S5-T4 Personal Productivity', 'S5-T6 separate work/home OAuth identities', 'S5-T7 finance read-only boot check; health output lint + escalation', 'S5-T8 HealthKit import (BK-010)'], val: ['Personal account connected; work agents cannot see it', '"Remind me about family commitments" → events + birthdays', 'Finance card has no pay/transfer anywhere'] },
+    { id: 'S6', name: 'Collaboration + Briefing v2', wk: [12, 13], rel: 2, goal: 'Mother-mediated agent bus with trace ids; the two flagship journeys end-to-end; full daily briefing on cron and by voice.', tasks: ['S6-T1 AgentMessage bus, depth cap 2', 'S6-T3 email → meeting → schedule → prep journey', 'S6-T4 cross-calendar conflict → one question', 'S6-T5 arbitration v1 (protected time, dedupe, pass-through labels)', 'S6-T6 BriefingWorkflow with six sections + SSE briefing', 'S6-T7 cron at preference.briefing.time', 'S6-T8 voice reads the briefing'], val: ['Seeded meeting request → one card; Approve sends + books, one trace id', 'Family dinner + late review → exactly one question', 'Briefing shows honest empty states'] },
+    { id: 'S7', name: 'Patterns + Personal Baseline', wk: [14, 15], rel: 3, goal: 'Deterministic pattern aggregation; rolling baseline with 14-day warm-up, MAD, drift detection, cooldown; neutral phrasing lint; "is this your normal?".', tasks: ['S7-T1 patterns → activity_daily', 'S7-T2 baseline: median + MAD, weekday/weekend, drift rule', 'S7-T3 phrasing + lint', 'S7-T4 nightly + 30-min jobs on AmbientAgent', 'S7-T5 observations API + SSE', 'S7-T7 confirmation → known memory; re-learn'], val: ['6 weeks synthetic (4 normal + 2 drift) → exactly one drift observation', 'Warm-up suppresses; cooldown suppresses repeats', 'Text passes the lint'] },
+    { id: 'S8', name: 'Balance + Digital Behaviour', wk: [16, 17], rel: 3, goal: 'Attention accounting, declared boundaries with enforcement, proper cross-calendar conflict detection, neutral behaviour observations.', tasks: ['S8-T1 balance: attention share, spillover, postponement debt, cadence', 'S8-T2 conflict detection across both identities + protected time', 'S8-T3 boundaries API + enforcement (work agents Observe outside hours)', 'S8-T4 behaviour: switching, notifications, long blocks, distractions', 'S8-T6 briefing Balance section'], val: ['Outside working hours, "draft replies" queues for morning', 'Heavy week → "about 11 hours more than your 4-week average"', 'Lint blocks "too much" / "should"'] },
+    { id: 'S9', name: 'Reading & Knowledge', wk: [18, 19], rel: 3, goal: 'Reading ledger and knowledge graph; "what have I been reading?"; Learning section; Career agent uses interests.', tasks: ['S9-T1 reading events + imports (reading list, Kindle CSV)', 'S9-T2 reading_items, knowledge_nodes, knowledge_edges', 'S9-T3 nightly topic extraction, weights recency × frequency', 'S9-T4 reading_knowledge agent + query_knowledge tool', 'S9-T5 Learning section; Career and Research consume topics'], val: ['Import → topics with counts and trend, linked to a project', 'Revoked reading consent → import refused'] },
+    { id: 'S10', name: 'Command center UI', wk: [20, 21], rel: 4, goal: 'Server-composed TODAY view, Work/Home lens, persistent Mother chat, approvals inbox and observation feed, mobile layouts.', tasks: ['S10-T1 GET /api/today', 'S10-T2 TODAY layout, lens toggle, badges', 'S10-T3 Mother chat panel (text + voice)', 'S10-T4 approvals inbox: approve, edit, reject, batch, undo', 'S10-T5 mobile ≤ 900 px', 'S10-T7 Playwright smoke'], val: ['TODAY populated from real integrations; missing ones show "connect"', 'Lens hides the other world', 'Batch approve two drafts; undo one'] },
+    { id: 'S11', name: 'Trust center + hardening', wk: [22, 23], rel: 4, goal: 'Permissions, memory, audit and consent UIs; retention purge; encryption of tokens and sensitive values; security review with injection tests.', tasks: ['S11-T1 permissions panel: modes, per-tool overrides, pause, quiet hours', 'S11-T2 memory panel with provenance, export, delete', 'S11-T3 audit viewer: "what ran while you were away"', 'S11-T4 consent persistence + storage checks', 'S11-T5 retention policies + purge; account export-then-delete', 'S11-T7 threat-model walkthrough, injection tests, access levels in business.toml'], val: ['Finance cannot be set to Automate', 'Injection email → pending only', 'Anonymous call to /api/memory → AWP error envelope'] },
+    { id: 'S12', name: 'Recipes + AWP + beta', wk: [24, 25], rel: 4, goal: 'Recipe engine with coded conditions; repetition detector; Mother as AWP entry with Suggest ceiling; cost and latency budgets; onboarding; beta gate.', tasks: ['S12-T1 automation_recipes + API', 'S12-T2 repetition detector → recipe proposals', 'S12-T3 recipe runner on cron; never publish_public or financial', 'S12-T5 business.toml capabilities; external callers capped at Suggest', 'S12-T6 token budgets, model routing, SLO check', 'S12-T7 onboarding flow', 'S12-T9 beta gate script'], val: ['Approve "archive newsletter" 9× → recipe proposed with condition, effect, undo window', 'External agent → pending action, never sent', 'Full journey set on desktop + mobile Safari'] }
+  ];
+  const REL = { 1: css('--work'), 2: css('--home'), 3: css('--intel'), 4: css('--trust') };
+  const RELNAME = { 1: 'R1 Foundation', 2: 'R2 Two Worlds', 3: 'R3 Intelligence', 4: 'R4 Command center & trust' };
+  (function timeline() {
+    const svg = $('#timeline'); const W = 900, H = 470, L = 210, R = 20, T = 30, B = 26, weeks = 25;
+    const plotW = W - L - R, x = w => L + (w - 1) / weeks * plotW, rowH = (H - T - B) / SPRINTS.length, barH = Math.min(22, rowH - 8);
+    for (let w = 1; w <= weeks + 1; w += 2) { svg.appendChild(el('line', { x1: x(w), x2: x(w), y1: T - 6, y2: H - B, class: 'grid' })); svg.appendChild(el('text', { x: x(w), y: T - 12, class: 'tick', 'text-anchor': 'middle' }, 'wk ' + w)); }
+    svg.appendChild(el('line', { x1: L, x2: W - R, y1: H - B, y2: H - B, class: 'axis' }));
+    SPRINTS.forEach((s, i) => {
+      const y = T + i * rowH + (rowH - barH) / 2, x0 = x(s.wk[0]), x1 = x(s.wk[1] + 1) - 2;
+      svg.appendChild(el('text', { x: L - 10, y: y + barH / 2 + 4, class: 'lab', 'text-anchor': 'end' }, s.id + ' · ' + s.name));
+      const bar = el('path', { d: roundedBar(x0, y, x1 - x0, barH, 4, 'right'), fill: REL[s.rel], class: 'bar', tabindex: '0', role: 'button', 'aria-label': s.id + ' ' + s.name + ', weeks ' + s.wk[0] + ' to ' + s.wk[1] });
+      svg.appendChild(bar);
+      const wl = s.wk[0] === s.wk[1] ? '1 wk' : '2 wk';
+      svg.appendChild(el('text', { x: x1 + 8, y: y + barH / 2 + 4, class: 'tick' }, wl));
+      bindTip(bar, s.id + ' — ' + s.name, [{ value: 'weeks ' + s.wk[0] + '–' + s.wk[1], label: RELNAME[s.rel], color: REL[s.rel] }, { value: s.tasks.length + ' tasks', label: 'click for details' }]);
+      bar.addEventListener('click', () => showSprint(s, true)); bar.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showSprint(s, true); } });
+    });
+  })();
+  const sd = $('#sprintDetail');
+  function showSprint(s, scroll) {
+    sd.replaceChildren();
+    const c = document.createElement('div'); c.className = 'card'; c.style.borderLeftColor = REL[s.rel];
+    const h = document.createElement('h4'); h.textContent = s.id + ' — ' + s.name; c.appendChild(h);
+    const meta = document.createElement('div'); meta.className = 'rail';
+    [['weeks ' + s.wk[0] + '–' + s.wk[1]], [RELNAME[s.rel]]].forEach(([t]) => { const sp = document.createElement('span'); sp.className = 'tag'; sp.textContent = t; meta.appendChild(sp); });
+    c.appendChild(meta);
+    const g = document.createElement('p'); g.style.marginTop = '8px'; const gb = document.createElement('b'); gb.textContent = 'Goal. '; g.appendChild(gb); g.appendChild(document.createTextNode(s.goal)); c.appendChild(g);
+    const th = document.createElement('h4'); th.style.marginTop = '12px'; th.textContent = 'Tasks'; c.appendChild(th);
+    const ul = document.createElement('ul'); ul.className = 'tasks';
+    s.tasks.forEach(t => { const li = document.createElement('li'); const i = t.indexOf(' '); const code = document.createElement('code'); code.textContent = t.slice(0, i); const sp = document.createElement('span'); sp.textContent = t.slice(i + 1); li.appendChild(code); li.appendChild(sp); ul.appendChild(li); });
+    c.appendChild(ul);
+    const vh = document.createElement('h4'); vh.style.marginTop = '12px'; vh.textContent = 'Validation (product owner)'; c.appendChild(vh);
+    const vl = document.createElement('ul'); vl.className = 'check'; s.val.forEach(v => { const li = document.createElement('li'); li.textContent = v; vl.appendChild(li); }); c.appendChild(vl);
+    sd.appendChild(c); if (scroll) sd.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  showSprint(SPRINTS[1], false);
+})();
+</script>
+</body>
+</html>
