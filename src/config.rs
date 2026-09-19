@@ -85,7 +85,7 @@ impl AppConfig {
             mcp_slides_path: resolve_path(
                 &manifest_dir,
                 "MCP_SLIDES_PATH",
-                "../mcp-servers/mcp_slides/target/release/slides-mcp-server",
+                "../mcp-servers/mcp-slides/target/release/slides-mcp-server",
             ),
             mcp_calendar_path: resolve_path(
                 &manifest_dir,
@@ -130,7 +130,7 @@ impl AppConfig {
             mcp_github_path: resolve_path(
                 &manifest_dir,
                 "MCP_GITHUB_PATH",
-                "../mcp-servers/mcp-github/target/release/mcp-github",
+                "../mcp-servers/mcp-github/target/release/adk-mcp-github",
             ),
             mcp_maps_path: resolve_path(
                 &manifest_dir,
