@@ -460,13 +460,11 @@ async fn awp_conformance_against_deploy_url() {
     );
 }
 
-#[tokio::test]
-async fn health_exposes_runtime_status() {
+
+/// Offline `AppState`: no API key, no MCP, in-memory sessions — every scenario streams its mock.
+fn offline_app_state() -> spatial_os::state::AppState {
     use adk_awp::BusinessContextLoader;
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode};
     use std::sync::Arc;
-    use tower::ServiceExt;
 
     common::load_env();
     let config = AppConfig::from_env().expect("config");
@@ -496,7 +494,7 @@ async fn health_exposes_runtime_status() {
         linkedin_partner_id: config.linkedin_partner_id.clone(),
         linkedin_conversion_id: config.linkedin_conversion_id,
     };
-    let state = spatial_os::state::AppState::new(
+    spatial_os::state::AppState::new(
         runtime,
         spatial_os::state::SessionStore::new(),
         config.artifact_dir.clone(),
@@ -530,7 +528,17 @@ async fn health_exposes_runtime_status() {
         "test".into(),
         None,
         spatial_os::voice::VoiceState::boot(&config),
-    );
+    )
+}
+
+#[tokio::test]
+async fn health_exposes_runtime_status() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::ServiceExt;
+
+    common::load_env();
+    let state = offline_app_state();
     let app = axum::Router::new()
         .route("/health", axum::routing::get(spatial_os::routes::health::health))
         .with_state(state);
@@ -1076,4 +1084,200 @@ tools = ["search_news"]
     assert_eq!(spec.mode, spatial_os::permissions::Mode::Suggest);
     assert_eq!(spec.world, spatial_os::domain::Domain::Shared);
     assert_eq!(catalog.tools_missing_effects(), vec![("legacy_agent".to_string(), "search_news".to_string())]);
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 2 · S1 — Mother Agent
+// ---------------------------------------------------------------------------
+
+fn ev_types(events: &[serde_json::Value]) -> Vec<String> {
+    events
+        .iter()
+        .filter_map(|e| e.get("type").and_then(|t| t.as_str()).map(str::to_string))
+        .collect()
+}
+
+#[tokio::test]
+async fn mother_multi_target_merges_two_scenarios_offline() {
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-mother".into()).await;
+    let response = dispatch_intent(IntentDispatch {
+        state: &state,
+        session_id: rec.session_id.clone(),
+        user_id: rec.user_id.clone(),
+        text: "What's happening with work?".into(),
+    })
+    .await;
+    let events = collect_sse_events(response).await;
+    let types = ev_types(&events);
+
+    // One scenario header covering both delegated workflows (morning 3 cards + people 3 cards).
+    assert_eq!(types.iter().filter(|t| *t == "scenario").count(), 1, "{types:?}");
+    assert_eq!(events[0]["total_cards"], 6);
+    let spawns: Vec<u64> = events
+        .iter()
+        .filter(|e| e["type"] == "card_spawn")
+        .map(|e| e["index"].as_u64().unwrap())
+        .collect();
+    assert_eq!(spawns, vec![0, 1, 2, 3, 4, 5], "cards must be re-indexed across targets");
+    assert!(events.iter().filter(|e| e["type"] == "card_spawn").all(|e| e["domain"].is_string()));
+    assert_eq!(types.iter().filter(|t| *t == "card_resolve").count(), 6);
+    // Exactly one synthesis from the Mother, then done.
+    assert_eq!(types.iter().filter(|t| *t == "suzy_summary").count(), 1);
+    let summary = events.iter().find(|e| e["type"] == "suzy_summary").unwrap();
+    assert_eq!(summary["key"], "mother");
+    assert!(summary["html"].as_str().unwrap().contains("Work:"), "{}", summary["html"]);
+    assert_eq!(types.last().map(String::as_str), Some("done"));
+    // Suggested actions carry a mode badge.
+    assert!(events.iter().any(|e| e["type"] == "suggest" && e["text"].as_str().unwrap().starts_with(|c: char| "👁💡⚡".contains(c))));
+
+    // Merged cards were persisted under the primary scenario with re-indexed positions.
+    let cards = state.sessions.list_cards(&rec.session_id).await.expect("cards");
+    assert_eq!(cards.len(), 6);
+    assert!(cards.iter().all(|c| c.resolve.is_some()));
+    let stored = state.sessions.get(&rec.session_id).await.unwrap();
+    assert_eq!(stored.scenario.as_deref(), Some("morning"));
+    assert!(stored.chat_history.iter().any(|t| t.role == "mother"));
+}
+
+#[tokio::test]
+async fn mother_single_target_passes_phase1_scenario_through() {
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-deck".into()).await;
+    let response = dispatch_intent(IntentDispatch {
+        state: &state,
+        session_id: rec.session_id.clone(),
+        user_id: rec.user_id.clone(),
+        text: "Build me a pitch deck".into(),
+    })
+    .await;
+    let events = collect_sse_events(response).await;
+    assert_eq!(events[0]["type"], "scenario");
+    assert_eq!(events[0]["key"], "deck");
+    let cards = state.sessions.list_cards(&rec.session_id).await.expect("cards");
+    assert!(cards.len() >= 3, "deck scenario persists its cards");
+    assert_eq!(events[0]["total_cards"].as_u64().unwrap() as usize, cards.len());
+    assert!(cards.iter().all(|c| c.domain == spatial_os::domain::Domain::Work));
+}
+
+#[tokio::test]
+async fn mother_clarifies_ambiguous_intent() {
+    use spatial_os::orchestrator::dispatch::{dispatch_intent, IntentDispatch};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-hmm".into()).await;
+    let response = dispatch_intent(IntentDispatch {
+        state: &state,
+        session_id: rec.session_id.clone(),
+        user_id: rec.user_id.clone(),
+        text: "hmm".into(),
+    })
+    .await;
+    let events = collect_sse_events(response).await;
+    let types = ev_types(&events);
+    assert_eq!(types[0], "suzy_summary");
+    assert_eq!(events[0]["key"], "clarify");
+    assert!(types.iter().filter(|t| *t == "suggest").count() >= 3);
+    assert!(!types.contains(&"card_spawn".to_string()));
+}
+
+#[test]
+fn mother_merge_reindexes_and_drops_inner_wrappers() {
+    use spatial_os::domain::Domain;
+    use spatial_os::mother::delegate::merge_target_events;
+    use spatial_os::mother::intake::Target;
+
+    let targets = vec![
+        Target { world: Domain::Work, agent: "productivity".into(), task: "t".into(), scenario: "morning".into() },
+        Target { world: Domain::Home, agent: "family".into(), task: "t".into(), scenario: "people".into() },
+    ];
+    let a = vec![
+        serde_json::json!({"type":"scenario","key":"morning","text":"x","total_cards":2}),
+        serde_json::json!({"type":"card_spawn","index":0,"card":{"title":"Today","agent":"calendar.agent"},"domain":"work"}),
+        serde_json::json!({"type":"card_spawn","index":1,"card":{"title":"Needs you","agent":"inbox.agent"},"domain":"work"}),
+        serde_json::json!({"type":"card_resolve","index":1,"resolve":{"big":"2 to reply","actions":["Draft replies"]}}),
+        serde_json::json!({"type":"suzy_summary","key":"morning","html":"inner"}),
+        serde_json::json!({"type":"done"}),
+    ];
+    let b = vec![
+        serde_json::json!({"type":"scenario","key":"people","text":"x","total_cards":1}),
+        serde_json::json!({"type":"card_spawn","index":0,"card":{"title":"Connections","agent":"crm.agent"}}),
+        serde_json::json!({"type":"card_status","index":0,"status":"working","line":"Finding…"}),
+        serde_json::json!({"type":"card_resolve","index":0,"resolve":{"lines":["Birthday: Mara"],"actions":["Send notes"]}}),
+        serde_json::json!({"type":"done"}),
+    ];
+    let merged = merge_target_events(&targets, vec![(a, false), (b, true)]);
+    assert_eq!(merged.total_cards, 3);
+    let json: Vec<serde_json::Value> = merged.events.iter().map(|e| serde_json::to_value(e).unwrap()).collect();
+    let types = ev_types(&json);
+    assert!(!types.iter().any(|t| t == "scenario" || t == "suzy_summary" || t == "done"));
+    let third_spawn = json.iter().find(|e| e["type"] == "card_spawn" && e["index"] == 2).expect("re-indexed spawn");
+    assert_eq!(third_spawn["card"]["title"], "Connections");
+    // The people-scenario card inherits the Home target's world when the card itself is unspecific.
+    assert_eq!(third_spawn["domain"], "home");
+    assert!(json.iter().any(|e| e["type"] == "card_status" && e["index"] == 2));
+    assert_eq!(merged.results.len(), 2);
+    assert!(merged.results[1].timed_out);
+    assert_eq!(merged.results[0].cards[1].resolve.as_ref().unwrap()["big"], "2 to reply");
+    assert_eq!(merged.card_at(2).unwrap()["title"], "Connections");
+}
+
+#[tokio::test]
+async fn mother_chat_route_streams_and_records_history() {
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use spatial_os::orchestrator::sse_collect::collect_sse_events;
+    use tower::ServiceExt;
+
+    let state = offline_app_state();
+    let rec = state.sessions.create_for_user("u-chat".into()).await;
+    let app = axum::Router::new()
+        .route(
+            "/api/sessions/{session_id}/chat",
+            axum::routing::post(spatial_os::routes::chat::chat).get(spatial_os::routes::chat::history),
+        )
+        .with_state(state.clone());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post(format!("/api/sessions/{}/chat", rec.session_id))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"text":"Prepare me for my afternoon."}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let events = collect_sse_events(response).await;
+    assert_eq!(events[0]["type"], "scenario");
+    assert_eq!(events[0]["total_cards"], 6);
+
+    let response = app
+        .oneshot(Request::get(format!("/api/sessions/{}/chat", rec.session_id)).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let turns = json["turns"].as_array().unwrap();
+    assert_eq!(turns[0]["role"], "user");
+    assert_eq!(turns[0]["text"], "Prepare me for my afternoon.");
+    assert_eq!(turns.last().unwrap()["role"], "mother");
+}
+
+#[test]
+fn business_toml_lists_chat_mother_capability() {
+    use adk_awp::BusinessContextLoader;
+    let path = common::manifest_dir().join("business.toml");
+    let ctx = BusinessContextLoader::from_file(&path).expect("business.toml").load();
+    assert!(ctx.capabilities.iter().any(|c| c.name == "chat_mother" && c.endpoint.contains("/chat")));
 }

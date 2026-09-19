@@ -44,6 +44,13 @@ method = "POST"
 access_level = "anonymous"
 
 [[capabilities]]
+name = "chat_mother"
+description = "Conversational turn with the Mother Agent — same orchestration pipeline as submit_intent, with per-session chat history (GET returns the transcript)"
+endpoint = "/api/sessions/{session_id}/chat"
+method = "POST"
+access_level = "anonymous"
+
+[[capabilities]]
 name = "submit_action"
 description = "Submit an action turn (combine, handle it, …) and receive conduct SSE events"
 endpoint = "/api/sessions/{session_id}/action"

@@ -237,7 +237,7 @@ async fn main() -> anyhow::Result<()> {
 
     let runtime = spatial_os::state::RuntimeStatus {
         milestone: "M11",
-        phase: "P2-S0",
+        phase: "P2-S1",
         agents_enabled: config.agents_enabled(),
         postgres_enabled: config.postgres_enabled(),
         auth_enabled: config.auth_enabled(),
@@ -262,7 +262,18 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
-    let app_state = AppState::new(
+    let mut mother_runner = None;
+    if coordinator_enabled {
+        match boot_mother_stack(&config, session_service.clone(), session_store.clone()).await {
+            Ok(runner) => {
+                tracing::info!("Mother Agent (LLM half) enabled");
+                mother_runner = Some(runner);
+            }
+            Err(e) => tracing::warn!("Mother Agent LLM unavailable ({e:#}) — deterministic intake/synthesis"),
+        }
+    }
+
+    let mut app_state = AppState::new(
         runtime,
         session_store,
         config.artifact_dir.clone(),
@@ -294,6 +305,7 @@ async fn main() -> anyhow::Result<()> {
         brand_tone,
         voice,
     );
+    app_state.mother_runner = mother_runner;
     let session_store = app_state.sessions.clone();
 
     // Known trust is verified by `JwtTrustAssigner`; the A2A dispatcher stays on
@@ -345,6 +357,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/sessions/{session_id}/action",
             post(routes::action::submit_action),
+        )
+        .route(
+            "/api/sessions/{session_id}/chat",
+            post(routes::chat::chat).get(routes::chat::history),
         )
         .route(
             "/api/sessions/{session_id}/fuse",
@@ -514,6 +530,25 @@ async fn boot_morning_stack(
     );
 
     Ok((runner, pool))
+}
+
+async fn boot_mother_stack(
+    config: &AppConfig,
+    session_service: SharedSessionService,
+    sessions: SessionStore,
+) -> anyhow::Result<Arc<Runner>> {
+    let api_key = config
+        .google_api_key
+        .as_deref()
+        .expect("agents_enabled implies API key");
+    let agent = spatial_os::mother::agent::build(api_key, &config.gemini_model, sessions).await?;
+    Ok(Arc::new(
+        Runner::builder()
+            .app_name("zavora-os-mother")
+            .agent(agent)
+            .session_service(session_service)
+            .build()?,
+    ))
 }
 
 async fn boot_coordinator_stack(

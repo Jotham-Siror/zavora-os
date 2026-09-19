@@ -5,7 +5,6 @@ use axum::response::{IntoResponse, Response};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::agents::router::{self, ClassifyOutcome};
 use crate::events::mock;
 use crate::events::sse::{to_event, FieldEvent};
 use crate::orchestrator::{combine, deck, lisbon, live, morning, people, proactive, week};
@@ -29,17 +28,7 @@ pub struct ActionDispatch<'a> {
     pub scenario: Option<String>,
 }
 
-async fn resolve_scenario(state: &AppState, user_id: &str, session_id: &str, text: &str) -> String {
-    if let Some(runner) = state.router_runner.as_ref() {
-        match router::classify(runner, user_id, session_id, text, mock::pick_scenario).await {
-            ClassifyOutcome::Scenario(key) => return key,
-            ClassifyOutcome::Clarify(_) => return "clarify".into(),
-        }
-    }
-    mock::pick_scenario(text).into()
-}
-
-fn stream_clarify(message: String) -> Response {
+pub fn stream_clarify(message: String) -> Response {
     let (tx, rx) = mpsc::channel::<Result<axum::response::sse::Event, Infallible>>(8);
     tokio::spawn(async move {
         let _ = tx
@@ -64,36 +53,43 @@ fn stream_clarify(message: String) -> Response {
     Sse::new(ReceiverStream::new(rx)).into_response()
 }
 
+/// Every entry point (intent, chat, voice, `/awp/a2a`) goes through the Mother Agent (ADR-001).
 pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
-    if let Some(runner) = req.state.router_runner.as_ref() {
-            if let ClassifyOutcome::Clarify(msg) =
-                router::classify(runner, &req.user_id, &req.session_id, &req.text, mock::pick_scenario)
-                    .await
-            {
-                return stream_clarify(msg);
-            }
-    }
+    crate::mother::handle_intent(crate::mother::MotherRequest {
+        state: req.state,
+        session_id: req.session_id,
+        user_id: req.user_id,
+        text: req.text,
+        entry: crate::mother::Entry::Intent,
+    })
+    .await
+}
 
-    let scenario = resolve_scenario(req.state, &req.user_id, &req.session_id, &req.text).await;
-
-    if scenario == "clarify" {
-        return stream_clarify(
-            "I'm not sure which flow you want. Try <b>Start my day</b>, <b>Build me a pitch deck</b>, or <b>Plan a trip to Lisbon</b>.".into(),
-        );
-    }
-
-    if scenarios::intent_is_live(&scenario, req.state.scenario_flags) {
-        let suzy = req.state.suzy_runner.clone();
-        let sessions = Some(req.state.sessions.clone());
+/// Stream one Phase 1 scenario workflow (live runner when enabled, mock otherwise).
+///
+/// `persist = false` runs the workflow without touching the session store; the Mother Agent
+/// uses that for multi-target fan-out and persists the merged, re-indexed cards itself.
+pub async fn stream_scenario(
+    state: &AppState,
+    scenario: &str,
+    session_id: String,
+    user_id: String,
+    text: String,
+    persist: bool,
+) -> Response {
+    let sessions = if persist { Some(state.sessions.clone()) } else { None };
+    let scenario = scenario.to_string();
+    if scenarios::intent_is_live(&scenario, state.scenario_flags) {
+        let suzy = state.suzy_runner.clone();
         match scenario.as_str() {
             "deck" => {
-                if let Some(runner) = req.state.deck_runner.clone() {
+                if let Some(runner) = state.deck_runner.clone() {
                     return Sse::new(deck::stream_deck(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
-                        req.state.artifact_dir.clone(),
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
+                        state.artifact_dir.clone(),
                         sessions,
                         suzy,
                     ))
@@ -101,22 +97,20 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                 }
             }
             "morning" => {
-                if let Some(runner) = req.state.morning_runner.clone() {
-                    let has_calendar = req
-                        .state
+                if let Some(runner) = state.morning_runner.clone() {
+                    let has_calendar = state
                         .morning_mcp
                         .as_ref()
                         .is_some_and(|p| p.calendar.is_some());
-                    let has_inbox = req
-                        .state
+                    let has_inbox = state
                         .morning_mcp
                         .as_ref()
                         .is_some_and(|p| p.email.is_some());
                     return Sse::new(morning::stream_morning(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
                         sessions,
                         has_calendar,
                         has_inbox,
@@ -126,17 +120,16 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                 }
             }
             "live" => {
-                if let Some(runner) = req.state.live_runner.clone() {
-                    let has_market = req
-                        .state
+                if let Some(runner) = state.live_runner.clone() {
+                    let has_market = state
                         .live_mcp
                         .as_ref()
                         .is_some_and(|p| p.market_data.is_some());
                     return Sse::new(live::stream_live(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
                         has_market,
                         sessions,
                         suzy,
@@ -145,13 +138,13 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                 }
             }
             "people" => {
-                if let Some(runner) = req.state.people_runner.clone() {
-                    let pool = req.state.people_mcp.as_ref();
+                if let Some(runner) = state.people_runner.clone() {
+                    let pool = state.people_mcp.as_ref();
                     return Sse::new(people::stream_people(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
                         pool.is_some_and(|p| p.slack.is_some()),
                         pool.is_some_and(|p| p.crm.is_some()),
                         pool.is_some_and(|p| p.calendar.is_some()),
@@ -162,13 +155,13 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                 }
             }
             "week" => {
-                if let Some(runner) = req.state.week_runner.clone() {
-                    let pool = req.state.week_mcp.as_ref();
+                if let Some(runner) = state.week_runner.clone() {
+                    let pool = state.week_mcp.as_ref();
                     return Sse::new(week::stream_week(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
                         pool.is_some_and(|p| p.banking.is_some()),
                         pool.is_some_and(|p| p.github.is_some()),
                         pool.is_some_and(|p| {
@@ -183,13 +176,13 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
                 }
             }
             "lisbon" => {
-                if let Some(runner) = req.state.lisbon_runner.clone() {
-                    let pool = req.state.lisbon_mcp.as_ref();
+                if let Some(runner) = state.lisbon_runner.clone() {
+                    let pool = state.lisbon_mcp.as_ref();
                     return Sse::new(lisbon::stream_lisbon(
                         runner,
-                        req.user_id,
-                        req.session_id,
-                        req.text,
+                        user_id.clone(),
+                        session_id.clone(),
+                        text.clone(),
                         pool.is_some_and(|p| p.maps.is_some()),
                         pool.is_some_and(|p| p.real_estate.is_some()),
                         sessions,
@@ -201,10 +194,10 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
             "proactive" => {
                 return Sse::new(proactive::stream_proactive(
                     None,
-                    req.user_id,
-                    req.session_id,
-                    req.text,
-                    req.state.ambient.clone(),
+                    user_id.clone(),
+                    session_id.clone(),
+                    text.clone(),
+                    state.ambient.clone(),
                     sessions,
                     suzy,
                 ))
@@ -216,15 +209,15 @@ pub async fn dispatch_intent(req: IntentDispatch<'_>) -> Response {
 
     Sse::new(mock::stream_intent_with_scenario(
         &scenario,
-        &req.text,
-        if req.state.coordinator_enabled {
-            req.state.suzy_runner.clone()
+        &text,
+        if state.coordinator_enabled {
+            state.suzy_runner.clone()
         } else {
             None
         },
-        Some(req.state.sessions.clone()),
-        Some(req.session_id),
-        Some(req.user_id),
+        sessions,
+        persist.then_some(session_id),
+        persist.then_some(user_id),
     ))
     .into_response()
 }

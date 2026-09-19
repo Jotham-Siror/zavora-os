@@ -5,6 +5,7 @@ pub mod ambient;
 pub mod background;
 pub mod agents;
 pub mod cards;
+pub mod chat;
 pub mod commit;
 pub mod fuse;
 pub mod greeting;

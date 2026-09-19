@@ -54,6 +54,17 @@ pub struct AgentRecord {
     pub domain: Domain,
 }
 
+/// One turn of the Mother chat (S1-T5). Kept short: the last [`CHAT_HISTORY_LIMIT`] turns.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChatTurn {
+    /// `user` | `mother`
+    pub role: String,
+    pub text: String,
+    pub ts: chrono::DateTime<chrono::Utc>,
+}
+
+pub const CHAT_HISTORY_LIMIT: usize = 20;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionRecord {
     pub session_id: String,
@@ -64,6 +75,9 @@ pub struct SessionRecord {
     pub cards: Vec<CardRecord>,
     pub agents_active: Vec<AgentRecord>,
     pub agents_resting: Vec<AgentRecord>,
+    /// Mother chat transcript for this session (S1-T5).
+    #[serde(default)]
+    pub chat_history: Vec<ChatTurn>,
 }
 
 impl SessionRecord {
@@ -77,6 +91,7 @@ impl SessionRecord {
             cards: Vec::new(),
             agents_active: Vec::new(),
             agents_resting: Vec::new(),
+            chat_history: Vec::new(),
         }
     }
 }
@@ -278,6 +293,27 @@ impl SessionStore {
         Some(agent)
     }
 
+    /// Append a Mother chat turn, keeping the last [`CHAT_HISTORY_LIMIT`] turns.
+    pub async fn append_chat(&self, session_id: &str, role: &str, text: &str) {
+        let turn = ChatTurn {
+            role: role.into(),
+            text: text.into(),
+            ts: chrono::Utc::now(),
+        };
+        self.mutate(session_id, |record| {
+            record.chat_history.push(turn);
+            if record.chat_history.len() > CHAT_HISTORY_LIMIT {
+                let drop = record.chat_history.len() - CHAT_HISTORY_LIMIT;
+                record.chat_history.drain(0..drop);
+            }
+        })
+        .await;
+    }
+
+    pub async fn chat_history(&self, session_id: &str) -> Vec<ChatTurn> {
+        self.get(session_id).await.map(|r| r.chat_history).unwrap_or_default()
+    }
+
     pub async fn list_agents(&self, session_id: &str) -> Option<(Vec<AgentRecord>, Vec<AgentRecord>)> {
         let record = self.get(session_id).await?;
         Some((record.agents_active, record.agents_resting))
@@ -286,7 +322,7 @@ impl SessionStore {
 
 async fn load_ui_session(pool: &PgPool, session_id: &str) -> anyhow::Result<Option<SessionRecord>> {
     let row = sqlx::query_as::<_, UiSessionRow>(
-        "SELECT session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting FROM ui_sessions WHERE session_id = $1",
+        "SELECT session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting, chat_history FROM ui_sessions WHERE session_id = $1",
     )
     .bind(session_id)
     .fetch_optional(pool)
@@ -301,6 +337,7 @@ async fn load_ui_session(pool: &PgPool, session_id: &str) -> anyhow::Result<Opti
         cards: serde_json::from_value(r.cards).unwrap_or_default(),
         agents_active: serde_json::from_value(r.agents_active).unwrap_or_default(),
         agents_resting: serde_json::from_value(r.agents_resting).unwrap_or_default(),
+        chat_history: serde_json::from_value(r.chat_history).unwrap_or_default(),
     }))
 }
 
@@ -309,9 +346,10 @@ async fn upsert_ui_session(pool: &PgPool, record: &SessionRecord) -> anyhow::Res
     let cards = serde_json::to_value(&record.cards)?;
     let agents_active = serde_json::to_value(&record.agents_active)?;
     let agents_resting = serde_json::to_value(&record.agents_resting)?;
+    let chat_history = serde_json::to_value(&record.chat_history)?;
 
     sqlx::query(
-        "INSERT INTO ui_sessions (session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (session_id) DO UPDATE SET user_id = $2, scenario = $3, origin_text = $4, artifacts = $5, cards = $6, agents_active = $7, agents_resting = $8, updated_at = NOW()",
+        "INSERT INTO ui_sessions (session_id, user_id, scenario, origin_text, artifacts, cards, agents_active, agents_resting, chat_history) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (session_id) DO UPDATE SET user_id = $2, scenario = $3, origin_text = $4, artifacts = $5, cards = $6, agents_active = $7, agents_resting = $8, chat_history = $9, updated_at = NOW()",
     )
     .bind(&record.session_id)
     .bind(&record.user_id)
@@ -321,6 +359,7 @@ async fn upsert_ui_session(pool: &PgPool, record: &SessionRecord) -> anyhow::Res
     .bind(cards)
     .bind(agents_active)
     .bind(agents_resting)
+    .bind(chat_history)
     .execute(pool)
     .await?;
     Ok(())
@@ -336,6 +375,7 @@ struct UiSessionRow {
     cards: serde_json::Value,
     agents_active: serde_json::Value,
     agents_resting: serde_json::Value,
+    chat_history: serde_json::Value,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -374,6 +414,8 @@ pub struct AppState {
     pub lisbon_runner: Option<Arc<Runner>>,
     pub router_runner: Option<Arc<Runner>>,
     pub suzy_runner: Option<Arc<Runner>>,
+    /// LLM half of the Mother Agent (S1-T2); `None` without an API key.
+    pub mother_runner: Option<Arc<Runner>>,
     pub session_service: SharedSessionService,
     pub auth: Option<Arc<crate::auth::AuthState>>,
     pub awp: Arc<crate::awp_gate::AwpGate>,
@@ -441,6 +483,7 @@ impl AppState {
             lisbon_runner,
             router_runner,
             suzy_runner,
+            mother_runner: None,
             session_service,
             auth,
             awp,
