@@ -33,7 +33,7 @@
     return box;
   }
 
-  window.addEventListener('zavora:camera', (e) => {
+  window.addEventListener('agentrix:camera', (e) => {
     if (e.detail?.active) {
       ensure();
       video.srcObject = e.detail.stream;
@@ -45,13 +45,13 @@
     }
   });
 
-  window.addEventListener('zavora:camera-frame', (e) => {
+  window.addEventListener('agentrix:camera-frame', (e) => {
     if (!status) return;
     const n = e.detail?.count || 0;
     status.textContent = `Suzy is watching · ${n} frame${n === 1 ? '' : 's'} sent`;
   });
 
-  window.addEventListener('zavora:gesture', (e) => {
+  window.addEventListener('agentrix:gesture', (e) => {
     if (!last) return;
     const g = e.detail?.gesture;
     last.textContent = EFFECT[g] || `gesture: ${g}`;
@@ -59,7 +59,7 @@
     setTimeout(() => last.classList.remove('hit'), 1800);
   });
 
-  window.addEventListener('zavora:voice-transcript', (e) => {
+  window.addEventListener('agentrix:voice-transcript', (e) => {
     if (!last) return;
     if (e.detail?.done) { replyDone = true; return; }
     if (replyDone) { reply = ''; replyDone = false; }

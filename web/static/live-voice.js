@@ -1,7 +1,7 @@
 /**
  * Gemini Live bridge — WS /ws/voice (mia pattern).
  * One Live session carries two independent inputs: the microphone (PCM up, Suzy's speech back)
- * and the camera (JPEG frames up about once a second, gestures back as `zavora:gesture`).
+ * and the camera (JPEG frames up about once a second, gestures back as `agentrix:gesture`).
  * Either runs alone; the session opens with the first input and closes with the last.
  * Falls back to prerecorded clips + SpeechRecognition when Live is unavailable.
  */
@@ -102,7 +102,7 @@
       if (msg.type === 'connected' && msg.session_id) {
         sessionId = msg.session_id;
         try {
-          sessionStorage.setItem('zavora_session_id', sessionId);
+          sessionStorage.setItem('agentrix_session_id', sessionId);
         } catch (_) {}
       }
       if (msg.type === 'connected' && typeof msg.camera === 'boolean') {
@@ -116,27 +116,27 @@
       if (msg.type === 'speech_started') {
         flushPlayback();
         userUtterance = '';
-        emit('zavora:voice-user-speaking', {});
+        emit('agentrix:voice-user-speaking', {});
       }
       // Suzy's words (output transcription) — for captions, never for the intent bar.
       if (msg.type === 'transcript' && msg.content) {
-        emit('zavora:voice-transcript', { role: 'assistant', content: msg.content });
+        emit('agentrix:voice-transcript', { role: 'assistant', content: msg.content });
       }
       // The user's words (input transcription): Gemini streams deltas, so keep the running
       // utterance in the intent bar; a completed transcript (OpenAI-style) replaces it.
       if (msg.type === 'user_transcript_delta' && msg.content) {
         userUtterance += msg.content;
         if (onTranscript) onTranscript(userUtterance);
-        emit('zavora:voice-user-transcript', { content: userUtterance, done: false });
+        emit('agentrix:voice-user-transcript', { content: userUtterance, done: false });
       }
       if (msg.type === 'user_transcript') {
         const text = (msg.content || userUtterance).trim();
         if (text && onTranscript) onTranscript(text);
-        emit('zavora:voice-user-transcript', { content: text, done: true });
+        emit('agentrix:voice-user-transcript', { content: text, done: true });
         userUtterance = '';
       }
       if (msg.type === 'response_done') {
-        emit('zavora:voice-transcript', { role: 'assistant', done: true });
+        emit('agentrix:voice-transcript', { role: 'assistant', done: true });
         // A session opened only to speak (greeting) has nothing left to do.
         if (!micActive && !cameraActive) closeSession();
       }
@@ -153,13 +153,13 @@
       if (msg.type === 'tool_call' && msg.name === 'submit_intent') {
         const sid = msg.arguments?.session_id || sessionId;
         if (sid) {
-          sessionStorage.setItem('zavora_session_id', sid);
+          sessionStorage.setItem('agentrix_session_id', sid);
           sessionId = sid;
         }
-        emit('zavora:voice-intent', { sessionId: sid, args: msg.arguments });
+        emit('agentrix:voice-intent', { sessionId: sid, args: msg.arguments });
       }
       if (msg.type === 'tool_call' && msg.name === 'ui_gesture' && msg.arguments?.gesture) {
-        emit('zavora:gesture', { gesture: msg.arguments.gesture });
+        emit('agentrix:gesture', { gesture: msg.arguments.gesture });
       }
       if (msg.type === 'frame_rejected') {
         console.warn('live camera: frame rejected —', msg.reason);
@@ -280,7 +280,7 @@
       micStream.getTracks().forEach((t) => t.stop());
       micStream = null;
     }
-    if (was) emit('zavora:mic', { active: false });
+    if (was) emit('agentrix:mic', { active: false });
   }
 
   /** Microphone on: the browser's permission prompt comes first (no deadline), then the session. */
@@ -300,7 +300,7 @@
       return false;
     }
     micActive = true;
-    emit('zavora:mic', { active: true });
+    emit('agentrix:mic', { active: true });
     return true;
   }
 
@@ -337,7 +337,7 @@
     if (data) {
       ws.send(JSON.stringify({ type: 'frame', mime: 'image/jpeg', data }));
       framesSent++;
-      emit('zavora:camera-frame', { count: framesSent });
+      emit('agentrix:camera-frame', { count: framesSent });
     }
   }
 
@@ -360,7 +360,7 @@
       camStream.getTracks().forEach((t) => t.stop());
       camStream = null;
     }
-    if (was) emit('zavora:camera', { active: false });
+    if (was) emit('agentrix:camera', { active: false });
   }
 
   /** Camera on, with or without the microphone: permission prompt first, then the session. */
@@ -382,7 +382,7 @@
     cameraActive = true;
     framesSent = 0;
     frameTimer = setInterval(sendFrame, FRAME_MS);
-    emit('zavora:camera', { active: true, stream: camStream });
+    emit('agentrix:camera', { active: true, stream: camStream });
     return true;
   }
 
@@ -416,7 +416,7 @@
     }
   }
 
-  window.ZavoraLiveVoice = {
+  window.AgentrixLiveVoice = {
     probe,
     // microphone
     startMic,
